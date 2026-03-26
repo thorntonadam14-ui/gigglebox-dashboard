@@ -7,7 +7,6 @@ type Child = {
   name: string;
   age: number | null;
   created_at?: string | null;
-  parent_id?: string;
 };
 
 type ChildrenResponse = {
@@ -18,10 +17,11 @@ type ChildrenResponse = {
 };
 
 const cardStyle: React.CSSProperties = {
-  border: "1px solid #ddd",
-  borderRadius: 16,
+  border: "1px solid #e5e7eb",
+  borderRadius: 18,
   padding: 18,
-  background: "#fff"
+  background: "#fff",
+  boxShadow: "0 8px 24px rgba(15, 23, 42, 0.04)"
 };
 
 export default function ChildrenPage() {
@@ -54,11 +54,12 @@ export default function ChildrenPage() {
   }, []);
 
   return (
-    <div style={{ padding: 40, display: "grid", gap: 20 }}>
+    <div style={{ padding: 32, maxWidth: 1200, margin: "0 auto", display: "grid", gap: 20 }}>
       <div>
+        <div style={{ color: "#7c3aed", fontWeight: 700, marginBottom: 8 }}>Parent Dashboard</div>
         <h1 style={{ marginBottom: 8 }}>Children</h1>
-        <p style={{ marginTop: 0, color: "#555" }}>
-          Real child profiles pulled from Supabase, ready to evolve into the parent dashboard flow.
+        <p style={{ marginTop: 0, color: "#667085" }}>
+          Child profiles pulled from Supabase, ready for richer parent views and child-specific drill-down.
         </p>
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
           <a href="/" style={{ textDecoration: "underline" }}>Home</a>
@@ -88,19 +89,21 @@ export default function ChildrenPage() {
               }}
             >
               {data.children.map((child) => (
-                <div key={child.id} style={cardStyle}>
-                  <div style={{ fontSize: 12, color: "#666", marginBottom: 6 }}>Child Profile</div>
+                <a
+                  key={child.id}
+                  href={`/children/${child.id}`}
+                  style={{ ...cardStyle, color: "inherit", textDecoration: "none" }}
+                >
+                  <div style={{ fontSize: 12, color: "#667085", marginBottom: 8 }}>Child Profile</div>
                   <h2 style={{ margin: "0 0 8px 0" }}>{child.name}</h2>
-                  <div style={{ color: "#555", marginBottom: 8 }}>
+                  <div style={{ color: "#667085", marginBottom: 8 }}>
                     {typeof child.age === "number" ? `Age ${child.age}` : "Age not set"}
                   </div>
-                  <div style={{ fontSize: 13, color: "#666" }}>
-                    ID: {child.id}
-                  </div>
-                  <div style={{ fontSize: 13, color: "#666", marginTop: 4 }}>
+                  <div style={{ fontSize: 13, color: "#667085" }}>ID: {child.id}</div>
+                  <div style={{ fontSize: 13, color: "#667085", marginTop: 4 }}>
                     Created: {child.created_at ?? "—"}
                   </div>
-                </div>
+                </a>
               ))}
             </div>
 

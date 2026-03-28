@@ -71,6 +71,20 @@ function extractWord(payload: Record<string, unknown> | null) {
   return typeof payload?.word === "string" ? payload.word : null;
 }
 
+function getTimestamp(value: string | null) {
+  if (!value) return 0;
+  const ms = Date.parse(value);
+  return Number.isNaN(ms) ? 0 : ms;
+}
+
+function sortNewestFirst<T extends { created_at?: string | null; createdAt?: string | null; occurred_at?: string | null; occurredAt?: string | null }>(rows: T[]) {
+  return [...rows].sort((a, b) => {
+    const aTime = getTimestamp(a.created_at ?? a.createdAt ?? a.occurred_at ?? a.occurredAt ?? null);
+    const bTime = getTimestamp(b.created_at ?? b.createdAt ?? b.occurred_at ?? b.occurredAt ?? null);
+    return bTime - aTime;
+  });
+}
+
 export async function GET(request: NextRequest) {
   try {
     const supabase = getSupabaseAdmin();
@@ -120,7 +134,20 @@ export async function GET(request: NextRequest) {
 
     const childById = new Map(children.map((child) => [child.id, child]));
     const deviceById = new Map(devices.map((device) => [device.id, device]));
-    const deviceToChild = new Map(links.map((link) => [link.device_id, link.child_id]));
+
+    // Critical fix:
+    // child_device_links may contain multiple historic rows for the same device.
+    // We must keep the newest link per device, not the oldest one.
+    const latestLinkByDevice = new Map<string, LinkRow>();
+    for (const link of sortNewestFirst(links)) {
+      if (!latestLinkByDevice.has(link.device_id)) {
+        latestLinkByDevice.set(link.device_id, link);
+      }
+    }
+
+    const deviceToChild = new Map(
+      Array.from(latestLinkByDevice.values()).map((link) => [link.device_id, link.child_id] as const)
+    );
 
     const filteredTelemetry = childId
       ? telemetry.filter((event) => deviceToChild.get(event.device_id) === childId)
@@ -131,8 +158,8 @@ export async function GET(request: NextRequest) {
       : children;
 
     const filteredLinks = childId
-      ? links.filter((link) => link.child_id === childId)
-      : links;
+      ? Array.from(latestLinkByDevice.values()).filter((link) => link.child_id === childId)
+      : Array.from(latestLinkByDevice.values());
 
     const filteredDevices = childId
       ? devices.filter((device) => deviceToChild.get(device.id) === childId)
@@ -145,18 +172,14 @@ export async function GET(request: NextRequest) {
     const latestEvent = filteredTelemetry[0] ?? null;
     const latestWord = filteredTelemetry
       .map((event) => extractWord(event.payload))
-      .find(Boolean) ?? null;
+      .find((value) => Boolean(value)) ?? null;
+
     const emotionEvents = filteredTelemetry.filter((event) => isEmotionEvent(event.event_type));
     const latestEmotion = emotionEvents
       .map((event) => extractEmotion(event.payload))
-      .find(Boolean) ?? null;
-    const coloringEvents = filteredTelemetry.filter((event) => isColoringEvent(event.event_type));
+      .find((value) => Boolean(value)) ?? null;
 
-    const emotionBreakdown = emotionEvents.reduce<Record<string, number>>((acc, event) => {
-      const emotion = extractEmotion(event.payload) ?? "unknown";
-      acc[emotion] = (acc[emotion] ?? 0) + 1;
-      return acc;
-    }, {});
+    const coloringEvents = filteredTelemetry.filter((event) => isColoringEvent(event.event_type));
 
     const eventTypes = filteredTelemetry.reduce<Record<string, number>>((acc, event) => {
       acc[event.event_type] = (acc[event.event_type] ?? 0) + 1;
@@ -164,14 +187,14 @@ export async function GET(request: NextRequest) {
     }, {});
 
     const childCards = filteredChildren.map((child) => {
-      const childLinks = links.filter((link) => link.child_id === child.id);
+      const childLinks = Array.from(latestLinkByDevice.values()).filter((link) => link.child_id === child.id);
       const linkedDeviceIds = childLinks.map((link) => link.device_id);
       const childEvents = telemetry.filter((event) => linkedDeviceIds.includes(event.device_id));
       const childLatestEvent = childEvents[0] ?? null;
       const latestEmotionForChild = childEvents
         .filter((event) => isEmotionEvent(event.event_type))
         .map((event) => extractEmotion(event.payload))
-        .find(Boolean) ?? null;
+        .find((value) => Boolean(value)) ?? null;
 
       return {
         id: child.id,
@@ -210,17 +233,20 @@ export async function GET(request: NextRequest) {
           ? childById.get(deviceToChild.get(event.device_id)!)?.name ?? null
           : null,
         createdAt: event.created_at
-      }));
+      }))
+      .filter((item) => Boolean(item.word));
 
-    const emotions = emotionEvents.map((event) => ({
-      id: event.id,
-      emotion: extractEmotion(event.payload),
-      childId: deviceToChild.get(event.device_id) ?? null,
-      childName: deviceToChild.get(event.device_id)
-        ? childById.get(deviceToChild.get(event.device_id)!)?.name ?? null
-        : null,
-      createdAt: event.created_at
-    }));
+    const emotions = emotionEvents
+      .map((event) => ({
+        id: event.id,
+        emotion: extractEmotion(event.payload),
+        childId: deviceToChild.get(event.device_id) ?? null,
+        childName: deviceToChild.get(event.device_id)
+          ? childById.get(deviceToChild.get(event.device_id)!)?.name ?? null
+          : null,
+        createdAt: event.created_at
+      }))
+      .filter((item) => Boolean(item.emotion));
 
     const savedArtwork = coloringEvents.map((event) => ({
       id: event.id,

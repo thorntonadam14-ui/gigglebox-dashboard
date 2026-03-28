@@ -39,11 +39,30 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (pairingError || !pairingCode) {
-      return NextResponse.json({ ok: false, error: "Invalid or used pairing code." }, { status: 400 });
+      return NextResponse.json(
+        { ok: false, error: "Invalid or used pairing code." },
+        { status: 400 }
+      );
     }
 
     if (new Date(pairingCode.expires_at).getTime() < Date.now()) {
-      return NextResponse.json({ ok: false, error: "Pairing code expired." }, { status: 400 });
+      return NextResponse.json(
+        { ok: false, error: "Pairing code expired." },
+        { status: 400 }
+      );
+    }
+
+    const { data: child, error: childError } = await supabase
+      .from("children")
+      .select("id, name")
+      .eq("id", pairingCode.child_id)
+      .single();
+
+    if (childError || !child) {
+      return NextResponse.json(
+        { ok: false, error: "Child not found for pairing code." },
+        { status: 400 }
+      );
     }
 
     let deviceId: string;
@@ -66,7 +85,10 @@ export async function POST(request: NextRequest) {
         .select("*")
         .single();
 
-      if (deviceError || !device) throw deviceError ?? new Error("Failed to create device.");
+      if (deviceError || !device) {
+        throw deviceError ?? new Error("Failed to create device.");
+      }
+
       deviceId = device.id;
     }
 
@@ -92,7 +114,10 @@ export async function POST(request: NextRequest) {
       ok: true,
       linked: true,
       childId: pairingCode.child_id,
+      childName: child.name,
       deviceId,
+      deviceName,
+      serialNumber,
       link
     });
   } catch (error) {

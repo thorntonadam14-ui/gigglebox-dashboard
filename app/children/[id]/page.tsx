@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { use, useEffect, useState } from "react";
 
 type Overview = {
   ok: boolean;
@@ -88,26 +87,18 @@ const card: React.CSSProperties = {
   boxShadow: "0 8px 24px rgba(15, 23, 42, 0.04)"
 };
 
-export default function ChildDetailPage() {
-  const routeParams = useParams<{ id: string }>();
-  const childId = typeof routeParams?.id === "string" ? routeParams.id : "";
-
+export default function ChildDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params);
   const [data, setData] = useState<Overview | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   async function load() {
-    if (!childId) {
-      setError("Missing child id.");
-      setLoading(false);
-      return;
-    }
-
     setLoading(true);
     setError(null);
 
     try {
-      const response = await fetch(`/api/dashboard/overview?childId=${childId}`, { cache: "no-store" });
+      const response = await fetch(`/api/dashboard/overview?childId=${id}`, { cache: "no-store" });
       const json = await response.json();
 
       if (!response.ok || !json.ok) {
@@ -124,7 +115,7 @@ export default function ChildDetailPage() {
 
   useEffect(() => {
     load();
-  }, [childId]);
+  }, [id]);
 
   const child = data?.children?.[0] ?? null;
 

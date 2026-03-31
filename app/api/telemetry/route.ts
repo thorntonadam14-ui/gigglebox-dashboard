@@ -1,21 +1,32 @@
-
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+function getEnv(name: string) {
+  const value = process.env[name];
+  if (!value) {
+    throw new Error(`Missing environment variable: ${name}`);
+  }
+  return value;
+}
+
+function getSupabaseAdmin() {
+  return createClient(
+    getEnv("NEXT_PUBLIC_SUPABASE_URL"),
+    getEnv("SUPABASE_SERVICE_ROLE_KEY"),
+    { auth: { persistSession: false, autoRefreshToken: false } }
+  );
+}
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-
     const { deviceId, eventType, payload } = body;
 
     if (!deviceId || !eventType) {
       return NextResponse.json({ ok: false, error: "Missing fields" }, { status: 400 });
     }
+
+    const supabase = getSupabaseAdmin();
 
     const { data, error } = await supabase
       .from("telemetry_events")

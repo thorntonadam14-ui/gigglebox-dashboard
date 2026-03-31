@@ -1,12 +1,10 @@
 Replace this file in your dashboard repo:
 
-- next.config.js
+- app/page.tsx
 
 What changed:
-- allows production build to continue even if Next.js type-checking reports errors
-
-Why:
-- Cloudflare is currently failing at the type-check stage, not at runtime compilation
-
-Safety:
-- does not change telemetry, sync, linking, API routes, or Supabase logic
+- Removed dependency on NEXT_PUBLIC_APP_URL for the home page status check
+- Uses request headers to build the current site URL safely on Vercel
+- Keeps the existing redirect logic:
+  - ready -> /dashboard
+  - not ready -> /setup

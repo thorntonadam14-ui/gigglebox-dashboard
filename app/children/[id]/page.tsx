@@ -89,13 +89,20 @@ const card: React.CSSProperties = {
 };
 
 export default function ChildDetailPage() {
-  const params = useParams<{ id: string }>();
-  const childId = Array.isArray(params?.id) ? params.id[0] : params?.id;
+  const routeParams = useParams<{ id: string }>();
+  const childId = typeof routeParams?.id === "string" ? routeParams.id : "";
+
   const [data, setData] = useState<Overview | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   async function load() {
+    if (!childId) {
+      setError("Missing child id.");
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     setError(null);
 

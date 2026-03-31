@@ -28,10 +28,14 @@
     ".next/types/**/*.ts",
     "app/**/*.ts",
     "app/**/*.tsx",
+    "components/**/*.ts",
+    "components/**/*.tsx",
+    "lib/**/*.ts",
+    "lib/**/*.tsx",
+    "middleware.ts",
     "next.config.js"
   ],
   "exclude": [
-    "node_modules",
-    "src"
+    "node_modules"
   ]
 }

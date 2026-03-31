@@ -8,7 +8,9 @@ export default async function Home() {
 
     if (res.ok) {
       const data = await res.json();
-      status = data.status || "ok";
+
+      // FIX IS HERE 👇
+      status = data.ok ? "ok" : "error";
     } else {
       status = "error";
     }

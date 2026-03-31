@@ -1,23 +1,33 @@
-export default async function Home() {
-  let status = "unknown";
+"use client";
 
-  try {
-    const res = await fetch("/api/status", {
-      cache: "no-store",
-    });
+import { useEffect, useState } from "react";
 
-    if (res.ok) {
-      const data = await res.json();
+export default function Home() {
+  const [status, setStatus] = useState("loading");
 
-      // FIX IS HERE 👇
-      status = data.ok ? "ok" : "error";
-    } else {
-      status = "error";
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadStatus() {
+      try {
+        const res = await fetch("/api/status", { cache: "no-store" });
+        const data = await res.json();
+        if (!cancelled) {
+          setStatus(data?.ok ? "ok" : "error");
+        }
+      } catch (err) {
+        console.error("Status check failed:", err);
+        if (!cancelled) {
+          setStatus("failed");
+        }
+      }
     }
-  } catch (err) {
-    console.error("Status check failed:", err);
-    status = "failed";
-  }
+
+    loadStatus();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return (
     <div>

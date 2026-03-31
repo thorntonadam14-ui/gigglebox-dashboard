@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useParams } from "next/navigation";
 
 type Overview = {
   ok: boolean;
@@ -87,7 +88,9 @@ const card: React.CSSProperties = {
   boxShadow: "0 8px 24px rgba(15, 23, 42, 0.04)"
 };
 
-export default function ChildDetailPage({ params }: { params: { id: string } }) {
+export default function ChildDetailPage() {
+  const params = useParams<{ id: string }>();
+  const childId = Array.isArray(params?.id) ? params.id[0] : params?.id;
   const [data, setData] = useState<Overview | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -97,7 +100,7 @@ export default function ChildDetailPage({ params }: { params: { id: string } }) 
     setError(null);
 
     try {
-      const response = await fetch(`/api/dashboard/overview?childId=${params.id}`, { cache: "no-store" });
+      const response = await fetch(`/api/dashboard/overview?childId=${childId}`, { cache: "no-store" });
       const json = await response.json();
 
       if (!response.ok || !json.ok) {
@@ -114,7 +117,7 @@ export default function ChildDetailPage({ params }: { params: { id: string } }) 
 
   useEffect(() => {
     load();
-  }, [params.id]);
+  }, [childId]);
 
   const child = data?.children?.[0] ?? null;
 

@@ -19,20 +19,61 @@ function generateCode() {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
+function farFutureIso() {
+  const future = new Date();
+  future.setFullYear(future.getFullYear() + 10);
+  return future.toISOString();
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const childId = typeof body?.childId === "string" ? body.childId : "";
+    const childId = typeof body?.childId === "string" ? body.childId.trim() : "";
 
     if (!childId) {
-      return NextResponse.json({ ok: false, error: "childId is required." }, { status: 400 });
+      return NextResponse.json(
+        { ok: false, error: "childId is required." },
+        { status: 400 }
+      );
     }
 
     const supabase = getSupabaseAdmin();
-    const code = generateCode();
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
 
-    const { data, error } = await supabase
+    const { data: existingRows, error: existingError } = await supabase
+      .from("device_pairing_codes")
+      .select("*")
+      .eq("child_id", childId)
+      .order("created_at", { ascending: false })
+      .limit(1);
+
+    if (existingError) throw existingError;
+
+    const existing = existingRows?.[0] ?? null;
+    const expiresAt = farFutureIso();
+
+    if (existing) {
+      const { data: updated, error: updateError } = await supabase
+        .from("device_pairing_codes")
+        .update({
+          expires_at: expiresAt,
+          used: false
+        })
+        .eq("id", existing.id)
+        .select("*")
+        .single();
+
+      if (updateError) throw updateError;
+
+      return NextResponse.json({
+        ok: true,
+        pairingCode: updated,
+        reused: true
+      });
+    }
+
+    const code = generateCode();
+
+    const { data: created, error: createError } = await supabase
       .from("device_pairing_codes")
       .insert({
         code,
@@ -43,15 +84,19 @@ export async function POST(request: NextRequest) {
       .select("*")
       .single();
 
-    if (error) throw error;
+    if (createError) throw createError;
 
     return NextResponse.json({
       ok: true,
-      pairingCode: data
+      pairingCode: created,
+      reused: false
     });
   } catch (error) {
     return NextResponse.json(
-      { ok: false, error: error instanceof Error ? error.message : "Unknown error" },
+      {
+        ok: false,
+        error: error instanceof Error ? error.message : "Unknown error"
+      },
       { status: 500 }
     );
   }

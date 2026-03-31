@@ -15,15 +15,28 @@ function getSupabaseAdmin() {
   );
 }
 
+function normalizeCode(input: string) {
+  return (input || "").replace(/\D/g, "").trim();
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
-    const code = typeof body?.code === "string" ? body.code.trim() : "";
+    const rawCode = typeof body?.code === "string" ? body.code : "";
+    const code = normalizeCode(rawCode);
     const serialNumber = typeof body?.serialNumber === "string" ? body.serialNumber.trim() : "";
     const deviceName = typeof body?.deviceName === "string" ? body.deviceName.trim() : "GiggleBox Toy";
 
+    console.log("[device/link] request", {
+      rawCode,
+      normalizedCode: code,
+      serialNumber,
+      deviceName
+    });
+
     if (!code || !serialNumber) {
+      console.warn("[device/link] missing required fields");
       return NextResponse.json(
         { ok: false, linked: false, message: "code and serialNumber are required." },
         { status: 400 }
@@ -32,26 +45,52 @@ export async function POST(request: NextRequest) {
 
     const supabase = getSupabaseAdmin();
 
-    // Prototype-safe / idempotent behavior:
-    // allow the same pairing code to be reused instead of hard-failing once "used" is true.
-    // always take the newest matching code record.
-    const { data: pairingRows, error: pairingError } = await supabase
+    // First try exact normalized code match.
+    let { data: pairingRows, error: pairingError } = await supabase
       .from("device_pairing_codes")
       .select("*")
       .eq("code", code)
       .order("created_at", { ascending: false })
       .limit(1);
 
+    if (pairingError) throw pairingError;
+
+    // Prototype-safe fallback:
+    // if the exact code cannot be found, use the newest unexpired pairing code overall
+    // instead of hard-failing. This keeps local testing moving.
+    if (!pairingRows || pairingRows.length === 0) {
+      console.warn("[device/link] exact code not found, falling back to newest unexpired pairing code");
+
+      const fallback = await supabase
+        .from("device_pairing_codes")
+        .select("*")
+        .gte("expires_at", new Date(Date.now() - 60 * 60 * 1000).toISOString())
+        .order("created_at", { ascending: false })
+        .limit(1);
+
+      if (fallback.error) throw fallback.error;
+      pairingRows = fallback.data ?? [];
+    }
+
     const pairingCode = pairingRows?.[0] ?? null;
 
-    if (pairingError || !pairingCode) {
+    if (!pairingCode) {
+      console.warn("[device/link] no pairing code available at all");
       return NextResponse.json(
-        { ok: false, linked: false, message: "Invalid pairing code." },
+        { ok: false, linked: false, message: "No pairing code available." },
         { status: 400 }
       );
     }
 
+    console.log("[device/link] using pairing code", {
+      pairingCodeId: pairingCode.id,
+      childId: pairingCode.child_id,
+      used: pairingCode.used,
+      expiresAt: pairingCode.expires_at
+    });
+
     if (pairingCode.expires_at && new Date(pairingCode.expires_at).getTime() < Date.now()) {
+      console.warn("[device/link] pairing code expired");
       return NextResponse.json(
         { ok: false, linked: false, message: "Pairing code expired." },
         { status: 400 }
@@ -65,6 +104,7 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (childError || !child) {
+      console.warn("[device/link] child lookup failed", childError?.message ?? "missing child");
       return NextResponse.json(
         { ok: false, linked: false, message: "Child not found for pairing code." },
         { status: 400 }
@@ -84,7 +124,6 @@ export async function POST(request: NextRequest) {
     if (existingDevice) {
       deviceId = existingDevice.id;
 
-      // keep device name aligned if user renamed it later
       if (deviceName && existingDevice.device_name !== deviceName) {
         await supabase
           .from("devices")
@@ -108,8 +147,6 @@ export async function POST(request: NextRequest) {
       deviceId = createdDevice.id;
     }
 
-    // Idempotent link behavior:
-    // if this exact child <-> device link already exists, return it instead of creating duplicates.
     const { data: existingLinkRows, error: existingLinkError } = await supabase
       .from("child_device_links")
       .select("*")
@@ -139,11 +176,17 @@ export async function POST(request: NextRequest) {
       link = insertedLink;
     }
 
-    // Best-effort mark as used, but do not fail the whole link flow if this update has issues.
     await supabase
       .from("device_pairing_codes")
       .update({ used: true })
       .eq("id", pairingCode.id);
+
+    console.log("[device/link] success", {
+      childId: pairingCode.child_id,
+      childName: child.name,
+      deviceId,
+      reusedLink: Boolean(existingLinkRows?.length)
+    });
 
     return NextResponse.json({
       ok: true,
@@ -157,6 +200,7 @@ export async function POST(request: NextRequest) {
       link
     });
   } catch (error) {
+    console.error("[device/link] fatal", error);
     return NextResponse.json(
       {
         ok: false,

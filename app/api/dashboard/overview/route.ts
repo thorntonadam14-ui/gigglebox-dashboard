@@ -71,6 +71,12 @@ function extractWord(payload: Record<string, unknown> | null) {
   return typeof payload?.word === "string" ? payload.word : null;
 }
 
+function extractActiveChildId(payload: Record<string, unknown> | null) {
+  if (typeof payload?.activeChildId === "string" && payload.activeChildId.trim()) return payload.activeChildId;
+  if (typeof payload?.childId === "string" && payload.childId.trim()) return payload.childId;
+  return null;
+}
+
 function getTimestamp(value: string | null) {
   if (!value) return 0;
   const ms = Date.parse(value);
@@ -97,27 +103,11 @@ export async function GET(request: NextRequest) {
       linksResult,
       alertsResult
     ] = await Promise.all([
-      supabase
-        .from("telemetry_events")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(200),
-      supabase
-        .from("children")
-        .select("id,name,age,created_at")
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("devices")
-        .select("id,serial_number,device_name,created_at")
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("child_device_links")
-        .select("id,child_id,device_id,created_at")
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("alerts")
-        .select("id,child_id,alert_type,message,created_at")
-        .order("created_at", { ascending: false })
+      supabase.from("telemetry_events").select("*").order("created_at", { ascending: false }).limit(500),
+      supabase.from("children").select("id,name,age,created_at").order("created_at", { ascending: false }),
+      supabase.from("devices").select("id,serial_number,device_name,created_at").order("created_at", { ascending: false }),
+      supabase.from("child_device_links").select("id,child_id,device_id,created_at").order("created_at", { ascending: false }),
+      supabase.from("alerts").select("id,child_id,alert_type,message,created_at").order("created_at", { ascending: false })
     ]);
 
     if (telemetryResult.error) throw telemetryResult.error;
@@ -135,9 +125,6 @@ export async function GET(request: NextRequest) {
     const childById = new Map(children.map((child) => [child.id, child]));
     const deviceById = new Map(devices.map((device) => [device.id, device]));
 
-    // Critical fix:
-    // child_device_links may contain multiple historic rows for the same device.
-    // We must keep the newest link per device, not the oldest one.
     const latestLinkByDevice = new Map<string, LinkRow>();
     for (const link of sortNewestFirst(links)) {
       if (!latestLinkByDevice.has(link.device_id)) {
@@ -149,8 +136,12 @@ export async function GET(request: NextRequest) {
       Array.from(latestLinkByDevice.values()).map((link) => [link.device_id, link.child_id] as const)
     );
 
+    const resolveChildIdForEvent = (event: TelemetryRow) => {
+      return extractActiveChildId(event.payload) ?? deviceToChild.get(event.device_id) ?? null;
+    };
+
     const filteredTelemetry = childId
-      ? telemetry.filter((event) => deviceToChild.get(event.device_id) === childId)
+      ? telemetry.filter((event) => resolveChildIdForEvent(event) === childId)
       : telemetry;
 
     const filteredChildren = childId
@@ -162,7 +153,10 @@ export async function GET(request: NextRequest) {
       : Array.from(latestLinkByDevice.values());
 
     const filteredDevices = childId
-      ? devices.filter((device) => deviceToChild.get(device.id) === childId)
+      ? devices.filter((device) => {
+          const latestChild = deviceToChild.get(device.id);
+          return latestChild === childId || filteredTelemetry.some((event) => event.device_id === device.id);
+        })
       : devices;
 
     const filteredAlerts = childId
@@ -170,14 +164,12 @@ export async function GET(request: NextRequest) {
       : alerts;
 
     const latestEvent = filteredTelemetry[0] ?? null;
-    const latestWord = filteredTelemetry
-      .map((event) => extractWord(event.payload))
-      .find((value) => Boolean(value)) ?? null;
+    const latestWord =
+      filteredTelemetry.map((event) => extractWord(event.payload)).find((value) => Boolean(value)) ?? null;
 
     const emotionEvents = filteredTelemetry.filter((event) => isEmotionEvent(event.event_type));
-    const latestEmotion = emotionEvents
-      .map((event) => extractEmotion(event.payload))
-      .find((value) => Boolean(value)) ?? null;
+    const latestEmotion =
+      emotionEvents.map((event) => extractEmotion(event.payload)).find((value) => Boolean(value)) ?? null;
 
     const coloringEvents = filteredTelemetry.filter((event) => isColoringEvent(event.event_type));
 
@@ -189,77 +181,80 @@ export async function GET(request: NextRequest) {
     const childCards = filteredChildren.map((child) => {
       const childLinks = Array.from(latestLinkByDevice.values()).filter((link) => link.child_id === child.id);
       const linkedDeviceIds = childLinks.map((link) => link.device_id);
-      const childEvents = telemetry.filter((event) => linkedDeviceIds.includes(event.device_id));
+      const childEvents = telemetry.filter((event) => resolveChildIdForEvent(event) === child.id);
       const childLatestEvent = childEvents[0] ?? null;
-      const latestEmotionForChild = childEvents
-        .filter((event) => isEmotionEvent(event.event_type))
-        .map((event) => extractEmotion(event.payload))
-        .find((value) => Boolean(value)) ?? null;
+      const latestEmotionForChild =
+        childEvents
+          .filter((event) => isEmotionEvent(event.event_type))
+          .map((event) => extractEmotion(event.payload))
+          .find((value) => Boolean(value)) ?? null;
 
       return {
         id: child.id,
         name: child.name,
         age: child.age,
         createdAt: child.created_at,
-        linkedDevice: linkedDeviceIds.length
-          ? deviceById.get(linkedDeviceIds[0]) ?? null
-          : null,
+        linkedDevice: linkedDeviceIds.length ? deviceById.get(linkedDeviceIds[0]) ?? null : null,
         totalEvents: childEvents.length,
         latestEmotion: latestEmotionForChild,
         lastActivityAt: childLatestEvent?.created_at ?? childLatestEvent?.occurred_at ?? null
       };
     });
 
-    const recentActivity = filteredTelemetry.slice(0, 30).map((event) => ({
-      id: event.id,
-      eventType: event.event_type,
-      payload: event.payload ?? {},
-      deviceId: event.device_id,
-      childId: deviceToChild.get(event.device_id) ?? null,
-      childName: deviceToChild.get(event.device_id)
-        ? childById.get(deviceToChild.get(event.device_id)!)?.name ?? null
-        : null,
-      occurredAt: event.occurred_at,
-      createdAt: event.created_at
-    }));
+    const recentActivity = filteredTelemetry.slice(0, 30).map((event) => {
+      const resolvedChildId = resolveChildIdForEvent(event);
+      return {
+        id: event.id,
+        eventType: event.event_type,
+        payload: event.payload ?? {},
+        deviceId: event.device_id,
+        childId: resolvedChildId,
+        childName: resolvedChildId ? childById.get(resolvedChildId)?.name ?? null : null,
+        occurredAt: event.occurred_at,
+        createdAt: event.created_at
+      };
+    });
 
     const words = filteredTelemetry
       .filter((event) => event.event_type === "word_spoken")
-      .map((event) => ({
-        id: event.id,
-        word: extractWord(event.payload),
-        childId: deviceToChild.get(event.device_id) ?? null,
-        childName: deviceToChild.get(event.device_id)
-          ? childById.get(deviceToChild.get(event.device_id)!)?.name ?? null
-          : null,
-        createdAt: event.created_at
-      }))
+      .map((event) => {
+        const resolvedChildId = resolveChildIdForEvent(event);
+        return {
+          id: event.id,
+          word: extractWord(event.payload),
+          childId: resolvedChildId,
+          childName: resolvedChildId ? childById.get(resolvedChildId)?.name ?? null : null,
+          createdAt: event.created_at
+        };
+      })
       .filter((item) => Boolean(item.word));
 
     const emotions = emotionEvents
-      .map((event) => ({
-        id: event.id,
-        emotion: extractEmotion(event.payload),
-        childId: deviceToChild.get(event.device_id) ?? null,
-        childName: deviceToChild.get(event.device_id)
-          ? childById.get(deviceToChild.get(event.device_id)!)?.name ?? null
-          : null,
-        createdAt: event.created_at
-      }))
+      .map((event) => {
+        const resolvedChildId = resolveChildIdForEvent(event);
+        return {
+          id: event.id,
+          emotion: extractEmotion(event.payload),
+          childId: resolvedChildId,
+          childName: resolvedChildId ? childById.get(resolvedChildId)?.name ?? null : null,
+          createdAt: event.created_at
+        };
+      })
       .filter((item) => Boolean(item.emotion));
 
-    const savedArtwork = coloringEvents.map((event) => ({
-      id: event.id,
-      childId: deviceToChild.get(event.device_id) ?? null,
-      childName: deviceToChild.get(event.device_id)
-        ? childById.get(deviceToChild.get(event.device_id)!)?.name ?? null
-        : null,
-      imageUrl: typeof event.payload?.imageUrl === "string" ? event.payload.imageUrl : null,
-      page: typeof event.payload?.page === "string" ? event.payload.page : null,
-      title: typeof event.payload?.title === "string" ? event.payload.title : null,
-      payload: event.payload ?? {},
-      createdAt: event.created_at
-    }));
+    const savedArtwork = coloringEvents.map((event) => {
+      const resolvedChildId = resolveChildIdForEvent(event);
+      return {
+        id: event.id,
+        childId: resolvedChildId,
+        childName: resolvedChildId ? childById.get(resolvedChildId)?.name ?? null : null,
+        imageUrl: typeof event.payload?.imageUrl === "string" ? event.payload.imageUrl : null,
+        page: typeof event.payload?.page === "string" ? event.payload.page : null,
+        title: typeof event.payload?.title === "string" ? event.payload.title : null,
+        payload: event.payload ?? {},
+        createdAt: event.created_at
+      };
+    });
 
     return NextResponse.json({
       ok: true,

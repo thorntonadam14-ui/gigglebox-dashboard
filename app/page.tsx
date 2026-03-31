@@ -1,11 +1,26 @@
-import React from "react";
+export default async function Home() {
+  let status = "unknown";
 
-export default function Home() {
-  return React.createElement(
-    "div",
-    null,
-    React.createElement("h1", null, "Gigglebox Dashboard"),
-    React.createElement("p", null, "Homepage is loading."),
-    React.createElement("p", null, "Next step: reconnect the live status and dashboard data safely.")
+  try {
+    const res = await fetch("/api/status", {
+      cache: "no-store",
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      status = data.status || "ok";
+    } else {
+      status = "error";
+    }
+  } catch (err) {
+    console.error("Status check failed:", err);
+    status = "failed";
+  }
+
+  return (
+    <div>
+      <h1>Gigglebox Dashboard</h1>
+      <p>Status: {status}</p>
+    </div>
   );
 }

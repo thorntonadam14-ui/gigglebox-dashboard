@@ -21,7 +21,7 @@ type TelemetryRow = {
   id: string;
   device_id: string;
   event_type: string;
-  payload: Record<string, unknown> | null;
+  payload: unknown;
   occurred_at: string | null;
   created_at: string | null;
 };
@@ -63,15 +63,37 @@ function isColoringEvent(type: string) {
   return ["coloring_saved", "coloring_book_saved", "coloring_save"].includes(type);
 }
 
-function extractEmotion(payload: Record<string, unknown> | null) {
+
+function coercePayload(payload: unknown): Record<string, unknown> {
+  if (!payload) return {};
+  if (typeof payload === "object" && !Array.isArray(payload)) {
+    return payload as Record<string, unknown>;
+  }
+  if (typeof payload === "string") {
+    const trimmed = payload.trim();
+    if (!trimmed) return {};
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        return parsed as Record<string, unknown>;
+      }
+      return { raw: payload };
+    } catch {
+      return { raw: payload };
+    }
+  }
+  return { raw: String(payload) };
+}
+
+function extractEmotion(payload: Record<string, unknown>) {
   return typeof payload?.emotion === "string" ? payload.emotion : null;
 }
 
-function extractWord(payload: Record<string, unknown> | null) {
+function extractWord(payload: Record<string, unknown>) {
   return typeof payload?.word === "string" ? payload.word : null;
 }
 
-function extractActiveChildId(payload: Record<string, unknown> | null) {
+function extractActiveChildId(payload: Record<string, unknown>) {
   if (typeof payload?.activeChildId === "string" && payload.activeChildId.trim()) return payload.activeChildId;
   if (typeof payload?.childId === "string" && payload.childId.trim()) return payload.childId;
   return null;
@@ -117,6 +139,10 @@ export async function GET(request: NextRequest) {
     if (alertsResult.error) throw alertsResult.error;
 
     const telemetry = (telemetryResult.data ?? []) as TelemetryRow[];
+    const normalizedTelemetry = telemetry.map((event) => ({
+      ...event,
+      payload: coercePayload(event.payload)
+    }));
     const children = (childrenResult.data ?? []) as ChildRow[];
     const devices = (devicesResult.data ?? []) as DeviceRow[];
     const links = (linksResult.data ?? []) as LinkRow[];
@@ -141,8 +167,8 @@ export async function GET(request: NextRequest) {
     };
 
     const filteredTelemetry = childId
-      ? telemetry.filter((event) => resolveChildIdForEvent(event) === childId)
-      : telemetry;
+      ? normalizedTelemetry.filter((event) => resolveChildIdForEvent(event) === childId)
+      : normalizedTelemetry;
 
     const filteredChildren = childId
       ? children.filter((child) => child.id === childId)
@@ -181,7 +207,7 @@ export async function GET(request: NextRequest) {
     const childCards = filteredChildren.map((child) => {
       const childLinks = Array.from(latestLinkByDevice.values()).filter((link) => link.child_id === child.id);
       const linkedDeviceIds = childLinks.map((link) => link.device_id);
-      const childEvents = telemetry.filter((event) => resolveChildIdForEvent(event) === child.id);
+      const childEvents = normalizedTelemetry.filter((event) => resolveChildIdForEvent(event) === child.id);
       const childLatestEvent = childEvents[0] ?? null;
       const latestEmotionForChild =
         childEvents

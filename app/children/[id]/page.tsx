@@ -99,13 +99,20 @@ export default function ChildDetailPage({ params }: { params: Promise<{ id: stri
 
     try {
       const response = await fetch(`/api/dashboard/overview?childId=${id}`, { cache: "no-store" });
-      const json = await response.json();
+      const text = await response.text();
 
-      if (!response.ok || !json.ok) {
-        throw new Error(json.error || "Failed to load child detail.");
+      let json: Overview | { ok?: boolean; error?: string } | null = null;
+      try {
+        json = text ? JSON.parse(text) : null;
+      } catch {
+        throw new Error("Dashboard API returned a non-JSON response.");
       }
 
-      setData(json);
+      if (!response.ok || !json?.ok) {
+        throw new Error((json && "error" in json && json.error) || "Failed to load child detail.");
+      }
+
+      setData(json as Overview);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
     } finally {

@@ -33,6 +33,11 @@ export default function Home() {
     <div>
       <h1>Gigglebox Dashboard</h1>
       <p>Status: {status}</p>
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+        <a href="/setup">Setup</a>
+        <a href="/dashboard">Dashboard</a>
+        <a href="/bluetooth">Bluetooth Console</a>
+      </div>
     </div>
   );
 }

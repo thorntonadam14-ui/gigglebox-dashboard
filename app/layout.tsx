@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import PwaRegistrar from "./components/PwaRegistrar";
 
 export const metadata: Metadata = {
   title: "GiggleBox Dashboard",
@@ -16,7 +17,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body><PwaRegistrar />{children}</body>
     </html>
   );
 }

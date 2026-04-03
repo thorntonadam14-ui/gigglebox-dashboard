@@ -143,6 +143,7 @@ export default function SetupPage() {
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
           <a href="/" style={{ textDecoration: "underline" }}>Home</a>
           <a href="/children" style={{ textDecoration: "underline" }}>Children</a>
+          <a href="/bluetooth" style={{ textDecoration: "underline" }}>Bluetooth Console</a>
         </div>
       </div>
 

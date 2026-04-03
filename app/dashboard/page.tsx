@@ -9,6 +9,7 @@ export default function Dashboard() {
       <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginTop: 18 }}>
         <a href="/">Home</a>
         <a href="/children">Children</a>
+        <a href="/bluetooth">Bluetooth Console</a>
       </div>
 
       <div style={{ marginTop: 28, padding: 18, border: "1px solid #e5e7eb", borderRadius: 18, background: "#fff", boxShadow: "0 8px 24px rgba(15, 23, 42, 0.04)" }}>

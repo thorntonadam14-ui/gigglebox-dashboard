@@ -133,120 +133,105 @@ export default function SetupPage() {
   const selectedChild = childrenData?.children.find((child) => child.id === pairingChildId) ?? null;
 
   return (
-    <div style={shell}>
-      <div>
-        <div style={{ color: "#7c3aed", fontWeight: 700, marginBottom: 8 }}>Fast Setup Flow</div>
-        <h1 style={{ margin: 0, fontSize: 40 }}>Parent + Child Setup</h1>
-        <p style={{ marginTop: 10, color: "#667085", maxWidth: 760 }}>
-          Create a child, generate a sync code, then enter that code on the toy. This is the onboarding page until the device is properly connected.
-        </p>
-        <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-          <a href="/" style={{ textDecoration: "underline" }}>Home</a>
-          <a href="/children" style={{ textDecoration: "underline" }}>Children</a>
-          <a href="/bluetooth" style={{ textDecoration: "underline" }}>Bluetooth Console</a>
+    <div className="gb-page">
+      <header className="gb-nav">
+        <div className="gb-container gb-nav-inner">
+          <a className="gb-brand" href="/">
+            <img className="gb-logo" src="/gigglebox-logo.png" alt="GiggleBox" />
+            <span><span className="gb-brand-kicker">Fast Setup Flow</span><span className="gb-brand-title">Parent + Child Setup</span></span>
+          </a>
+          <nav className="gb-nav-links">
+            <a className="gb-nav-link" href="/">Home</a>
+            <a className="gb-nav-link" href="/children">Children</a>
+            <a className="gb-button" href="/bluetooth">Talk to Toy</a>
+          </nav>
         </div>
-      </div>
+      </header>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-        <div style={card}>
-          <h2 style={{ marginTop: 0 }}>1. Create Child Profile</h2>
-          <form onSubmit={createChild} style={{ display: "grid", gap: 12 }}>
-            <label>
-              <div style={{ marginBottom: 6 }}>Parent name (optional)</div>
-              <input value={parentName} onChange={(e) => setParentName(e.target.value)} style={{ width: "100%", padding: 10, borderRadius: 10, border: "1px solid #d0d5dd" }} placeholder="Adam" />
-            </label>
-            <label>
-              <div style={{ marginBottom: 6 }}>Parent email (optional)</div>
-              <input value={parentEmail} onChange={(e) => setParentEmail(e.target.value)} style={{ width: "100%", padding: 10, borderRadius: 10, border: "1px solid #d0d5dd" }} placeholder="parent@example.com" />
-            </label>
-            <label>
-              <div style={{ marginBottom: 6 }}>Child name</div>
-              <input value={childName} onChange={(e) => setChildName(e.target.value)} style={{ width: "100%", padding: 10, borderRadius: 10, border: "1px solid #d0d5dd" }} placeholder="Georgie" required />
-            </label>
-            <label>
-              <div style={{ marginBottom: 6 }}>Child age (optional)</div>
-              <input value={childAge} onChange={(e) => setChildAge(e.target.value)} style={{ width: "100%", padding: 10, borderRadius: 10, border: "1px solid #d0d5dd" }} placeholder="6" />
-            </label>
-            <button type="submit" disabled={creating} style={{ padding: "12px 16px", borderRadius: 10 }}>
-              {creating ? "Creating…" : "Create Child"}
-            </button>
-          </form>
-        </div>
+      <main className="gb-main">
+        <div className="gb-container gb-grid">
+          <section className="gb-hero">
+            <div>
+              <div className="gb-eyebrow">Set up in minutes</div>
+              <h1 className="gb-title-sm">Create a child profile, then sync the toy.</h1>
+              <p className="gb-lede">
+                Generate the 6-digit code here and enter it on the toy. This keeps the original setup flow intact, but presents it as a clear parent journey.
+              </p>
+            </div>
+            <aside className="gb-hero-panel">
+              <div className="gb-orb">1</div>
+              <h2>Setup path</h2>
+              <p>Create child → generate sync code → enter code on toy → open dashboard.</p>
+            </aside>
+          </section>
 
-        <div style={card}>
-          <h2 style={{ marginTop: 0 }}>2. Sync Code</h2>
-          {selectedChild ? (
-            <>
-              <div style={{ marginBottom: 12 }}>
-                <strong>Selected child:</strong> {selectedChild.name}
-                {typeof selectedChild.age === "number" ? ` (age ${selectedChild.age})` : ""}
-              </div>
+          {error ? <div className="gb-alert">{error}</div> : null}
 
-              <button onClick={() => generateCode(selectedChild.id)} style={{ padding: "12px 16px", borderRadius: 10, marginBottom: 16 }}>
-                Generate Sync Code
-              </button>
+          <section className="gb-grid gb-two">
+            <div className="gb-card">
+              <span className="gb-pill">Step 1</span>
+              <h2>Create Child Profile</h2>
+              <form onSubmit={createChild} className="gb-grid">
+                <label className="gb-label">Parent name <input className="gb-input" value={parentName} onChange={(e) => setParentName(e.target.value)} placeholder="Adam" /></label>
+                <label className="gb-label">Parent email <input className="gb-input" value={parentEmail} onChange={(e) => setParentEmail(e.target.value)} placeholder="parent@example.com" /></label>
+                <label className="gb-label">Child name <input className="gb-input" value={childName} onChange={(e) => setChildName(e.target.value)} placeholder="Georgie" required /></label>
+                <label className="gb-label">Child age <input className="gb-input" value={childAge} onChange={(e) => setChildAge(e.target.value)} placeholder="6" /></label>
+                <button className="gb-button" type="submit" disabled={creating}>{creating ? "Creating…" : "Create Child"}</button>
+              </form>
+            </div>
 
-              {pairingCode ? (
-                <div style={{ border: "1px dashed #7c3aed", borderRadius: 16, padding: 18, background: "#faf5ff" }}>
-                  <div style={{ color: "#7c3aed", fontWeight: 700, marginBottom: 8 }}>Sync Code</div>
-                  <div style={{ fontSize: 40, fontWeight: 800, letterSpacing: 4 }}>{pairingCode.code}</div>
-                  <div style={{ marginTop: 10, color: "#667085", fontSize: 14 }}>
-                    Expires: {pairingCode.expires_at}
-                  </div>
-                  <div style={{ marginTop: 14, padding: 12, borderRadius: 12, background: "#ffffff" }}>
-                    <strong>Next:</strong> Enter this code on the toy. After the toy links successfully, go back to the home page and it should take you into the dashboard.
-                  </div>
+            <div className="gb-card">
+              <span className="gb-pill">Step 2</span>
+              <h2>Sync Code</h2>
+              {selectedChild ? (
+                <div className="gb-grid">
+                  <p><strong>Selected child:</strong> {selectedChild.name}{typeof selectedChild.age === "number" ? ` (age ${selectedChild.age})` : ""}</p>
+                  <button className="gb-button" onClick={() => generateCode(selectedChild.id)}>Generate Sync Code</button>
+                  {pairingCode ? (
+                    <div className="gb-grid">
+                      <div className="gb-code">{pairingCode.code}</div>
+                      <p className="gb-muted">Expires: {pairingCode.expires_at}</p>
+                      <div className="gb-alert gb-success"><strong>Next:</strong> Enter this code on the toy. After the toy links successfully, return to the dashboard.</div>
+                    </div>
+                  ) : <p className="gb-muted">No sync code generated yet.</p>}
                 </div>
-              ) : (
-                <p style={{ color: "#667085" }}>No sync code generated yet.</p>
-              )}
-            </>
-          ) : (
-            <p style={{ color: "#667085" }}>Create or select a child first.</p>
-          )}
-        </div>
-      </div>
+              ) : <p className="gb-muted">Create or select a child first.</p>}
+            </div>
+          </section>
 
-      <div style={card}>
-        <h2 style={{ marginTop: 0 }}>3. What the parent does on the toy</h2>
-        <ol style={{ marginTop: 0, paddingLeft: 18 }}>
-          <li>Open the toy’s grown-up corner.</li>
-          <li>Choose <strong>Sync with Parent Dashboard</strong>.</li>
-          <li>Enter the 6-digit sync code shown here.</li>
-          <li>Wait for the success message on the toy.</li>
-          <li>Return to the website home page.</li>
-        </ol>
-      </div>
+          <section className="gb-card">
+            <span className="gb-pill">Step 3</span>
+            <h2>What the parent does on the toy</h2>
+            <ol>
+              <li>Open the toy’s grown-up corner.</li>
+              <li>Choose <strong>Sync with Parent Dashboard</strong>.</li>
+              <li>Enter the 6-digit sync code shown here.</li>
+              <li>Wait for the success message on the toy.</li>
+              <li>Return to this website.</li>
+            </ol>
+          </section>
 
-      <div style={card}>
-        <h2 style={{ marginTop: 0 }}>Existing Children</h2>
-        {loadingChildren ? (
-          <p>Loading children…</p>
-        ) : childrenData && childrenData.children.length > 0 ? (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 }}>
-            {childrenData.children.map((child) => (
-              <div key={child.id} style={{ border: child.id === pairingChildId ? "2px solid #7c3aed" : "1px solid #e5e7eb", borderRadius: 14, padding: 14 }}>
-                <div style={{ fontWeight: 700, fontSize: 18 }}>{child.name}</div>
-                <div style={{ color: "#667085", marginTop: 4 }}>
-                  {typeof child.age === "number" ? `Age ${child.age}` : "Age not set"}
-                </div>
-                <div style={{ color: "#667085", fontSize: 13, marginTop: 6 }}>{child.id}</div>
-                <button onClick={() => setPairingChildId(child.id)} style={{ marginTop: 12, padding: "10px 12px", borderRadius: 10 }}>
-                  Use for Sync
-                </button>
+          <section className="gb-card">
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
+              <div><span className="gb-pill">Profiles</span><h2>Existing Children</h2></div>
+              <button className="gb-button-secondary" onClick={loadChildren}>Refresh</button>
+            </div>
+            {loadingChildren ? <p>Loading children…</p> : childrenData && childrenData.children.length > 0 ? (
+              <div className="gb-grid gb-auto">
+                {childrenData.children.map((child) => (
+                  <div key={child.id} className="gb-card" style={{ boxShadow: "none", borderColor: child.id === pairingChildId ? "#7d40ff" : undefined }}>
+                    <div className="gb-pill">Child</div>
+                    <h3>{child.name}</h3>
+                    <p className="gb-muted">{typeof child.age === "number" ? `Age ${child.age}` : "Age not set"}</p>
+                    <p className="gb-muted" style={{ fontSize: 13, wordBreak: "break-all" }}>{child.id}</p>
+                    <button className="gb-button-secondary" onClick={() => setPairingChildId(child.id)}>Use for Sync</button>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-        ) : (
-          <p>No children yet.</p>
-        )}
-      </div>
-
-      {error ? (
-        <div style={{ ...card, borderColor: "#fda29b", background: "#fff5f4", color: "#b42318" }}>
-          <strong>Setup error:</strong> {error}
+            ) : <p className="gb-muted">No children found yet.</p>}
+          </section>
         </div>
-      ) : null}
+      </main>
     </div>
   );
 }

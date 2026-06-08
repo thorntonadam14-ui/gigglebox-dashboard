@@ -306,118 +306,107 @@ export default function BleReceiverConsole() {
   }
 
   return (
-    <div style={shell}>
-      <div>
-        <div style={{ color: "#7c3aed", fontWeight: 700, marginBottom: 8 }}>Step 2 · Parent PWA BLE Receiver</div>
-        <h1 style={{ margin: 0, fontSize: 40 }}>Bluetooth Console</h1>
-        <p style={{ marginTop: 10, color: "#667085", maxWidth: 820 }}>
-          This page turns the dashboard PWA into the parent-side Bluetooth central. It can connect to the toy,
-          listen for notify packets, and optionally relay recognised telemetry envelopes into the existing dashboard API.
-        </p>
-        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
-          <a href="/" style={{ textDecoration: "underline" }}>Home</a>
-          <a href="/setup" style={{ textDecoration: "underline" }}>Setup</a>
-          <a href="/dashboard" style={{ textDecoration: "underline" }}>Dashboard</a>
-          <InstallPrompt />
+    <div className="gb-page">
+      <header className="gb-nav">
+        <div className="gb-container gb-nav-inner">
+          <a className="gb-brand" href="/">
+            <img className="gb-logo" src="/gigglebox-logo.png" alt="GiggleBox" />
+            <span><span className="gb-brand-kicker">Toy Connection</span><span className="gb-brand-title">Talk to Toy</span></span>
+          </a>
+          <nav className="gb-nav-links">
+            <a className="gb-nav-link" href="/">Home</a>
+            <a className="gb-nav-link" href="/setup">Setup</a>
+            <a className="gb-nav-link" href="/dashboard">Dashboard</a>
+            <InstallPrompt />
+          </nav>
         </div>
-      </div>
+      </header>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: 16 }}>
-        <div style={card}>
-          <h2 style={{ marginTop: 0 }}>Connection</h2>
-          <div style={{ display: "grid", gap: 12 }}>
-            <label>
-              <div style={{ marginBottom: 6 }}>Device name prefix</div>
-              <input value={config.deviceNamePrefix} onChange={(e) => setConfig((current) => ({ ...current, deviceNamePrefix: e.target.value }))} style={{ width: "100%", padding: 10, borderRadius: 10, border: "1px solid #d0d5dd" }} />
-            </label>
-            <label>
-              <div style={{ marginBottom: 6 }}>BLE service UUID</div>
-              <input value={config.serviceUuid} onChange={(e) => setConfig((current) => ({ ...current, serviceUuid: e.target.value }))} style={{ width: "100%", padding: 10, borderRadius: 10, border: "1px solid #d0d5dd", fontFamily: "monospace" }} />
-            </label>
-            <label>
-              <div style={{ marginBottom: 6 }}>Notify characteristic UUID</div>
-              <input value={config.notifyCharacteristicUuid} onChange={(e) => setConfig((current) => ({ ...current, notifyCharacteristicUuid: e.target.value }))} style={{ width: "100%", padding: 10, borderRadius: 10, border: "1px solid #d0d5dd", fontFamily: "monospace" }} />
-            </label>
-            <label>
-              <div style={{ marginBottom: 6 }}>Write characteristic UUID</div>
-              <input value={config.writeCharacteristicUuid} onChange={(e) => setConfig((current) => ({ ...current, writeCharacteristicUuid: e.target.value }))} style={{ width: "100%", padding: 10, borderRadius: 10, border: "1px solid #d0d5dd", fontFamily: "monospace" }} />
-            </label>
-          </div>
-
-          <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 16 }}>
-            <button onClick={() => void connectBle()} disabled={isConnecting || !isSupported} style={{ padding: "12px 16px", borderRadius: 10 }}>
-              {isConnecting ? "Connecting…" : isConnected ? "Reconnect" : "Connect BLE"}
-            </button>
-            <button onClick={() => void disconnectBle()} disabled={!isConnected} style={{ padding: "12px 16px", borderRadius: 10 }}>
-              Disconnect
-            </button>
-          </div>
-
-          <div style={{ marginTop: 16, padding: 14, borderRadius: 14, background: "#f8fafc", display: "grid", gap: 8 }}>
-            <div><strong>Web Bluetooth support:</strong> {isSupported ? "Yes" : "No"}</div>
-            <div><strong>Connected device:</strong> {connectedName || "Not connected"}</div>
-            <div><strong>Last packet:</strong> {lastPacket || "None yet"}</div>
-            <div><strong>Incoming packets:</strong> {summary.incoming}</div>
-            <div><strong>Relayed to API:</strong> {summary.relayed}</div>
-          </div>
-        </div>
-
-        <div style={card}>
-          <h2 style={{ marginTop: 0 }}>Relay + Commands</h2>
-          <label style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 12 }}>
-            <input type="checkbox" checked={relayTelemetry} onChange={(e) => setRelayTelemetry(e.target.checked)} />
-            <span>Relay recognised telemetry payloads into <code>/api/telemetry</code></span>
-          </label>
-          <label>
-            <div style={{ marginBottom: 6 }}>Override deviceId for relay (optional)</div>
-            <input value={relayDeviceIdOverride} onChange={(e) => setRelayDeviceIdOverride(e.target.value)} placeholder="108f10f7-899a-4705-9284-ec1a923bc0a9" style={{ width: "100%", padding: 10, borderRadius: 10, border: "1px solid #d0d5dd", fontFamily: "monospace" }} />
-          </label>
-
-          <label style={{ display: "grid", gap: 6, marginTop: 14 }}>
-            <div>Write packet (future parent-to-toy commands)</div>
-            <textarea value={sendText} onChange={(e) => setSendText(e.target.value)} rows={6} style={{ width: "100%", padding: 10, borderRadius: 10, border: "1px solid #d0d5dd", fontFamily: "monospace" }} />
-          </label>
-
-          <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 14 }}>
-            <button onClick={() => void sendPacket(sendText)} disabled={!isConnected} style={{ padding: "12px 16px", borderRadius: 10 }}>
-              Send packet
-            </button>
-            <button onClick={() => setSendText('{"type":"LINK_DEVICE","code":"000000"}')} style={{ padding: "12px 16px", borderRadius: 10 }}>
-              Load LINK_DEVICE template
-            </button>
-          </div>
-
-          <div style={{ marginTop: 16, padding: 12, borderRadius: 12, background: "#faf5ff", color: "#5b21b6" }}>
-            <strong>Important:</strong> if the toy-side UUIDs are changed later, update them here before connecting.
-          </div>
-        </div>
-      </div>
-
-      <div style={card}>
-        <h2 style={{ marginTop: 0 }}>Live BLE Log</h2>
-        {logs.length === 0 ? (
-          <p style={{ color: "#667085" }}>No BLE activity yet. Connect to the toy to begin.</p>
-        ) : (
-          <div style={{ display: "grid", gap: 8, maxHeight: 480, overflow: "auto" }}>
-            {logs.map((entry, index) => (
-              <div key={`${entry.ts}-${index}`} style={{ padding: 10, borderRadius: 10, background: entry.level === "error" ? "#fff1f2" : entry.level === "warn" ? "#fffbeb" : entry.level === "success" ? "#ecfdf3" : "#f8fafc", border: "1px solid #e5e7eb", fontFamily: "monospace", fontSize: 13 }}>
-                <strong>[{entry.ts}]</strong> {entry.message}
+      <main className="gb-main">
+        <div className="gb-container gb-grid">
+          <section className="gb-hero">
+            <div>
+              <div className="gb-eyebrow">Parent PWA BLE Receiver</div>
+              <h1 className="gb-title-sm">Connect the website directly to the toy.</h1>
+              <p className="gb-lede">
+                This is the working Bluetooth console wrapped in a parent-friendly interface. It still connects to the toy, listens for notify packets, and relays recognised telemetry into the existing dashboard API.
+              </p>
+              <div className="gb-actions">
+                <button className="gb-button" onClick={() => void connectBle()} disabled={isConnecting || !isSupported}>{isConnecting ? "Connecting…" : isConnected ? "Reconnect Toy" : "Connect Toy"}</button>
+                <button className="gb-button-secondary" onClick={() => void disconnectBle()} disabled={!isConnected}>Disconnect</button>
               </div>
-            ))}
-          </div>
-        )}
-      </div>
+            </div>
+            <aside className="gb-hero-panel">
+              <div className="gb-orb">{isConnected ? "✓" : "BT"}</div>
+              <h2>{isConnected ? "Toy connected" : "Ready to connect"}</h2>
+              <p>{connectedName || "Use Chrome or Edge on HTTPS, then select the GiggleBox device from the Bluetooth picker."}</p>
+              <div className="gb-actions"><span className="gb-pill">Incoming: {summary.incoming}</span><span className="gb-pill">Relayed: {summary.relayed}</span></div>
+            </aside>
+          </section>
 
-      <div style={card}>
-        <h2 style={{ marginTop: 0 }}>Test order</h2>
-        <ol style={{ marginTop: 0, paddingLeft: 18 }}>
-          <li>Install this dashboard as a PWA on the phone.</li>
-          <li>Open <strong>Bluetooth Console</strong> in Chrome/Edge on HTTPS.</li>
-          <li>Tap <strong>Connect BLE</strong> and select the GiggleBox toy.</li>
-          <li>Confirm notify packets appear in the live log.</li>
-          <li>With relay enabled, verify recognised telemetry hits the existing dashboard API path.</li>
-        </ol>
-      </div>
+          <section className="gb-grid gb-two">
+            <div className="gb-card">
+              <span className="gb-pill">Connection Settings</span>
+              <h2>Bluetooth link</h2>
+              <div className="gb-grid">
+                <label className="gb-label">Device name prefix<input className="gb-input" value={config.deviceNamePrefix} onChange={(e) => setConfig((current) => ({ ...current, deviceNamePrefix: e.target.value }))} /></label>
+                <label className="gb-label">BLE service UUID<input className="gb-input" value={config.serviceUuid} onChange={(e) => setConfig((current) => ({ ...current, serviceUuid: e.target.value }))} style={{ fontFamily: "monospace" }} /></label>
+                <label className="gb-label">Notify characteristic UUID<input className="gb-input" value={config.notifyCharacteristicUuid} onChange={(e) => setConfig((current) => ({ ...current, notifyCharacteristicUuid: e.target.value }))} style={{ fontFamily: "monospace" }} /></label>
+                <label className="gb-label">Write characteristic UUID<input className="gb-input" value={config.writeCharacteristicUuid} onChange={(e) => setConfig((current) => ({ ...current, writeCharacteristicUuid: e.target.value }))} style={{ fontFamily: "monospace" }} /></label>
+              </div>
+              <div className="gb-card" style={{ boxShadow: "none", marginTop: 18 }}>
+                <p><strong>Web Bluetooth support:</strong> {isSupported ? "Yes" : "No"}</p>
+                <p><strong>Connected device:</strong> {connectedName || "Not connected"}</p>
+                <p><strong>Last packet:</strong> {lastPacket || "None yet"}</p>
+                <p><strong>Incoming packets:</strong> {summary.incoming}</p>
+                <p><strong>Relayed to API:</strong> {summary.relayed}</p>
+              </div>
+            </div>
+
+            <div className="gb-card">
+              <span className="gb-pill">Relay + Commands</span>
+              <h2>Send and relay</h2>
+              <label style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 14, fontWeight: 800, color: "var(--gb-ink)" }}>
+                <input type="checkbox" checked={relayTelemetry} onChange={(e) => setRelayTelemetry(e.target.checked)} />
+                <span>Relay recognised telemetry payloads into <code>/api/telemetry</code></span>
+              </label>
+              <label className="gb-label">Override deviceId for relay<input className="gb-input" value={relayDeviceIdOverride} onChange={(e) => setRelayDeviceIdOverride(e.target.value)} placeholder="108f10f7-899a-4705-9284-ec1a923bc0a9" style={{ fontFamily: "monospace" }} /></label>
+              <label className="gb-label" style={{ marginTop: 14 }}>Write packet<textarea className="gb-textarea" value={sendText} onChange={(e) => setSendText(e.target.value)} rows={6} style={{ fontFamily: "monospace" }} /></label>
+              <div className="gb-actions">
+                <button className="gb-button" onClick={() => void sendPacket(sendText)} disabled={!isConnected}>Send packet</button>
+                <button className="gb-button-secondary" onClick={() => setSendText('{"type":"LINK_DEVICE","code":"000000"}')}>Load LINK_DEVICE template</button>
+              </div>
+              <div className="gb-alert" style={{ marginTop: 18 }}><strong>Important:</strong> if the toy-side UUIDs are changed later, update them here before connecting.</div>
+            </div>
+          </section>
+
+          <section className="gb-card">
+            <span className="gb-pill">Live BLE Log</span>
+            <h2>Messages from the toy</h2>
+            {logs.length === 0 ? <p className="gb-muted">No BLE activity yet. Connect to the toy to begin.</p> : (
+              <div className="gb-grid" style={{ maxHeight: 480, overflow: "auto" }}>
+                {logs.map((entry, index) => (
+                  <div key={`${entry.ts}-${index}`} className="gb-log" style={{ background: entry.level === "error" ? "#fff1f2" : entry.level === "warn" ? "#fffbeb" : entry.level === "success" ? "#ecfdf3" : "#f8fafc" }}>
+                    <strong>[{entry.ts}]</strong> {entry.message}
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
+          <section className="gb-card">
+            <span className="gb-pill">Test order</span>
+            <h2>Safe connection checklist</h2>
+            <ol>
+              <li>Install this dashboard as a PWA on the phone.</li>
+              <li>Open <strong>Talk to Toy</strong> in Chrome/Edge on HTTPS.</li>
+              <li>Tap <strong>Connect Toy</strong> and select the GiggleBox toy.</li>
+              <li>Confirm notify packets appear in the live log.</li>
+              <li>With relay enabled, verify recognised telemetry hits the existing dashboard API path.</li>
+            </ol>
+          </section>
+        </div>
+      </main>
     </div>
   );
 }

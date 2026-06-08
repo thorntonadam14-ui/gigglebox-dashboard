@@ -36,6 +36,9 @@ export default function ChildrenPage() {
             <a className="gb-nav-link" href="/setup">Setup</a>
             <a className="gb-button" href="/setup">Setup</a>
           </nav>
+          <a className="gb-studio-mark" href="/" aria-label="Giggle Byte Studios">
+            <img src="/gigglebyte-studios-logo.png" alt="Giggle Byte Studios" />
+          </a>
         </div>
       </header>
       <main className="gb-main">

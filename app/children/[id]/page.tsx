@@ -155,6 +155,16 @@ function summarizeEvent(eventType: string, payload: Record<string, unknown>, chi
   }
 }
 
+function getArtworkImageUrl(art: Overview["deepDive"]["savedArtwork"][number]) {
+  if (art.imageUrl) return art.imageUrl;
+  const possibleKeys = ["image_url", "imageURL", "url", "downloadUrl", "thumbnailUrl", "previewUrl", "dataUrl", "pngUrl"];
+  for (const key of possibleKeys) {
+    const value = art.payload?.[key];
+    if (typeof value === "string" && value.length > 0) return value;
+  }
+  return null;
+}
+
 function categoryFor(eventType: string) {
   if (eventType.includes("word")) return { label: "Speaking", icon: "💬", className: "gb-report-blue" };
   if (eventType.includes("emotion")) return { label: "Emotion", icon: "😊", className: "gb-report-green" };
@@ -168,6 +178,7 @@ export default function ChildDetailPage({ params }: { params: { id: string } }) 
   const [data, setData] = useState<Overview | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [activityFilter, setActivityFilter] = useState("all");
 
   async function load() {
     setLoading(true);
@@ -196,6 +207,11 @@ export default function ChildDetailPage({ params }: { params: { id: string } }) 
   const moodEmoji = emotionEmoji[(latestEmotion ?? "").toLowerCase()] ?? "😊";
   const recentEmotionList = (data?.deepDive.emotions ?? []).slice(0, 7).reverse();
   const uniqueWords = Array.from(new Set(filteredWords.map((item) => item.word).filter(Boolean) as string[])).slice(0, 8);
+  const filteredRecentActivity = useMemo(() => {
+    const items = data?.recentActivity ?? [];
+    if (activityFilter === "all") return items;
+    return items.filter((event) => categoryFor(event.eventType).label.toLowerCase() === activityFilter);
+  }, [data, activityFilter]);
 
   return (
     <div className="gb-page">
@@ -210,6 +226,9 @@ export default function ChildDetailPage({ params }: { params: { id: string } }) 
             <a className="gb-nav-link" href="/children">Children</a>
             <a className="gb-button" href="/setup">Setup</a>
           </nav>
+          <a className="gb-studio-mark" href="/" aria-label="Giggle Byte Studios">
+            <img src="/gigglebyte-studios-logo.png" alt="Giggle Byte Studios" />
+          </a>
         </div>
       </header>
 
@@ -272,10 +291,23 @@ export default function ChildDetailPage({ params }: { params: { id: string } }) 
 
               <section className="gb-report-layout">
                 <div className="gb-card">
-                  <div className="gb-report-card-head"><div><span className="gb-pill">Recent activity</span><h2>What happened lately</h2></div><small>{data.recentActivity.length} recent events</small></div>
-                  {data.recentActivity.length === 0 ? <p className="gb-muted">No activity for this child yet.</p> : (
+                  <div className="gb-report-card-head gb-report-card-head-select">
+                    <div><span className="gb-pill">Recent activity</span><h2>What happened lately</h2></div>
+                    <div className="gb-report-filter">
+                      <small>{filteredRecentActivity.length} shown</small>
+                      <select className="gb-select" value={activityFilter} onChange={(event) => setActivityFilter(event.target.value)} aria-label="Filter recent activity">
+                        <option value="all">All activity</option>
+                        <option value="speaking">Speaking</option>
+                        <option value="emotion">Emotions</option>
+                        <option value="creativity">Creative work</option>
+                        <option value="story">Stories</option>
+                        <option value="game">Games</option>
+                      </select>
+                    </div>
+                  </div>
+                  {filteredRecentActivity.length === 0 ? <p className="gb-muted">No activity matches this filter yet.</p> : (
                     <div className="gb-timeline">
-                      {data.recentActivity.slice(0, 10).map((event) => {
+                      {filteredRecentActivity.slice(0, 10).map((event) => {
                         const category = categoryFor(event.eventType);
                         return (
                           <div className="gb-timeline-item" key={event.id}>
@@ -295,12 +327,25 @@ export default function ChildDetailPage({ params }: { params: { id: string } }) 
                   <div className="gb-report-card-head"><div><span className="gb-pill">Creative work</span><h2>Saved artwork</h2></div></div>
                   {data.deepDive.savedArtwork.length === 0 ? <p className="gb-muted">No saved artwork yet.</p> : (
                     <div className="gb-art-list">
-                      {data.deepDive.savedArtwork.slice(0, 6).map((art) => (
-                        <div className="gb-art-item" key={art.id}>
-                          <div className="gb-art-thumb">🎨</div>
-                          <div><strong>{art.title ?? art.page ?? "Saved artwork"}</strong><small>Saved {formatDateTime(art.createdAt)}</small></div>
-                        </div>
-                      ))}
+                      {data.deepDive.savedArtwork.slice(0, 6).map((art) => {
+                        const artworkImage = getArtworkImageUrl(art);
+                        return (
+                          <div className="gb-art-item" key={art.id}>
+                            {artworkImage ? (
+                              <a className="gb-art-thumb gb-art-thumb-image" href={artworkImage} target="_blank" rel="noreferrer" aria-label="Open saved artwork">
+                                <img src={artworkImage} alt={art.title ?? art.page ?? "Saved artwork"} />
+                              </a>
+                            ) : (
+                              <div className="gb-art-thumb">🎨</div>
+                            )}
+                            <div>
+                              <strong>{art.title ?? art.page ?? "Saved artwork"}</strong>
+                              <small>Saved {formatDateTime(art.createdAt)}</small>
+                              {artworkImage ? <a className="gb-small-link" href={artworkImage} target="_blank" rel="noreferrer">View image</a> : <small>Image file not stored with this save yet</small>}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </div>

@@ -319,6 +319,9 @@ export default function BleReceiverConsole() {
             <a className="gb-nav-link" href="/dashboard">Dashboard</a>
             <InstallPrompt />
           </nav>
+          <a className="gb-studio-mark" href="/" aria-label="Giggle Byte Studios">
+            <img src="/gigglebyte-studios-logo.png" alt="Giggle Byte Studios" />
+          </a>
         </div>
       </header>
 

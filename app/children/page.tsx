@@ -33,7 +33,6 @@ export default function ChildrenPage() {
           </a>
           <nav className="gb-nav-links">
             <a className="gb-nav-link" href="/">Home</a>
-            <a className="gb-nav-link" href="/setup">Setup</a>
             <a className="gb-button" href="/setup">Setup</a>
           </nav>
           <a className="gb-studio-mark" href="/" aria-label="Giggle Byte Studios">

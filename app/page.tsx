@@ -11,7 +11,6 @@ function Nav() {
           <span><span className="gb-brand-kicker">Parent Portal</span><span className="gb-brand-title">GiggleBox Dashboard</span></span>
         </a>
         <nav className="gb-nav-links">
-          <a className="gb-nav-link" href="/setup">Setup</a>
           <a className="gb-nav-link" href="/children">Children</a>
           <a className="gb-button" href="/setup">Setup</a>
         </nav>

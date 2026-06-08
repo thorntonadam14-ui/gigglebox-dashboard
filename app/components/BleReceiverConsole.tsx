@@ -315,7 +315,6 @@ export default function BleReceiverConsole() {
           </a>
           <nav className="gb-nav-links">
             <a className="gb-nav-link" href="/">Home</a>
-            <a className="gb-nav-link" href="/setup">Setup</a>
             <a className="gb-nav-link" href="/dashboard">Dashboard</a>
             <InstallPrompt />
           </nav>

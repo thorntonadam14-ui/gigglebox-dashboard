@@ -13,7 +13,7 @@ function Nav() {
         <nav className="gb-nav-links">
           <a className="gb-nav-link" href="/setup">Setup</a>
           <a className="gb-nav-link" href="/children">Children</a>
-          <a className="gb-button" href="/bluetooth">Talk to Toy</a>
+          <a className="gb-button" href="/setup">Setup</a>
         </nav>
       </div>
     </header>
@@ -57,7 +57,7 @@ export default function Home() {
                 The working toy connection flow stays exactly where it is — now wrapped in a cleaner, parent-ready experience.
               </p>
               <div className="gb-actions">
-                <a className="gb-button" href="/bluetooth">Talk to Toy</a>
+                <a className="gb-button" href="/setup">Setup</a>
                 <a className="gb-button-secondary" href="/setup">Start Setup</a>
                 <a className="gb-nav-link" href="/children">View Children</a>
               </div>
@@ -67,6 +67,7 @@ export default function Home() {
               <h2>{statusCopy}</h2>
               <p>Status is checked live from the existing API. No pairing, dashboard, or Bluetooth logic has been moved out of place.</p>
               <div className="gb-actions"><span className="gb-pill">Live status: {status}</span></div>
+              <a className="gb-small-link" href="/bluetooth">Advanced toy connection</a>
             </aside>
           </section>
 
@@ -76,10 +77,10 @@ export default function Home() {
               <h2>Set up child</h2>
               <p className="gb-muted">Create the child profile and generate the sync code used by the toy.</p>
             </a>
-            <a className="gb-card" href="/bluetooth" style={{ textDecoration: "none" }}>
+            <a className="gb-card" href="/setup" style={{ textDecoration: "none" }}>
               <span className="gb-pill">Step 2</span>
-              <h2>Talk to toy</h2>
-              <p className="gb-muted">Connect through Web Bluetooth, listen for packets, and relay telemetry.</p>
+              <h2>Sync the toy</h2>
+              <p className="gb-muted">Use setup to generate the code and link the toy to the selected child profile.</p>
             </a>
             <a className="gb-card" href="/children" style={{ textDecoration: "none" }}>
               <span className="gb-pill">Step 3</span>

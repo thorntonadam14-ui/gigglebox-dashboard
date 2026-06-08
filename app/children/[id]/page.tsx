@@ -79,37 +79,13 @@ type Overview = {
   error?: string;
 };
 
-const SURFACE = "#ffffff";
-const BORDER = "#e7ecf3";
-const TEXT_MUTED = "#667085";
-const TEXT = "#101828";
-const BRAND = "#7c3aed";
-const BG = "#f8fafc";
-
-const card: React.CSSProperties = {
-  border: `1px solid ${BORDER}`,
-  borderRadius: 20,
-  padding: 20,
-  background: SURFACE,
-  boxShadow: "0 10px 30px rgba(15, 23, 42, 0.06)"
-};
-
-const statValue: React.CSSProperties = {
-  fontSize: 30,
-  fontWeight: 800,
-  marginTop: 10,
-  color: TEXT,
-  lineHeight: 1.1
-};
-
-const buttonStyle: React.CSSProperties = {
-  border: `1px solid ${BORDER}`,
-  background: SURFACE,
-  borderRadius: 10,
-  padding: "10px 14px",
-  fontWeight: 600,
-  color: TEXT,
-  cursor: "pointer"
+const emotionEmoji: Record<string, string> = {
+  happy: "😊",
+  laughing: "😄",
+  neutral: "😐",
+  concerned: "😟",
+  sad: "😔",
+  curious: "🤔"
 };
 
 function formatDateTime(value: string | null | undefined) {
@@ -128,7 +104,6 @@ function formatRelative(value: string | null | undefined) {
   if (!value) return "No activity yet";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-
   const diffMs = Date.now() - date.getTime();
   const minutes = Math.max(0, Math.round(diffMs / 60000));
   if (minutes < 1) return "Just now";
@@ -152,29 +127,19 @@ function humanizeLabel(value: string | null | undefined) {
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-function eventTone(eventType: string) {
-  if (eventType.includes("emotion")) return "#ecfdf3";
-  if (eventType.includes("word")) return "#eef4ff";
-  if (eventType.includes("storybook")) return "#f5f3ff";
-  if (eventType.includes("MONSTERCHEF")) return "#fff7ed";
-  if (eventType.includes("coloring")) return "#effcf6";
-  return "#f8fafc";
-}
-
 function summarizeEvent(eventType: string, payload: Record<string, unknown>, childName: string) {
   const safeName = childName || "This child";
   const word = typeof payload.word === "string" ? payload.word : null;
   const emotion = typeof payload.emotion === "string" ? payload.emotion : null;
-  const pageId = typeof payload.page_id === "string" ? payload.page_id : null;
   const choiceValue = typeof payload.value === "string" ? payload.value : null;
   const choiceLabel = typeof payload.choice_label === "string" ? payload.choice_label : null;
   const saveTitle = typeof payload.title === "string" ? payload.title : null;
 
   switch (eventType) {
     case "word_spoken":
-      return word ? `${safeName} said “${word}”.` : `${safeName} spoke a word.`;
+      return word ? `${safeName} said “${word}”.` : `${safeName} practised speaking.`;
     case "emotion_state":
-      return emotion ? `${safeName} felt ${emotion}.` : `${safeName} sent an emotion update.`;
+      return emotion ? `${safeName} checked in as ${humanizeLabel(emotion)}.` : `${safeName} shared an emotion.`;
     case "coloring_saved":
       return `${safeName} saved ${saveTitle || "a colouring page"}.`;
     case "MONSTERCHEF_START":
@@ -182,12 +147,21 @@ function summarizeEvent(eventType: string, payload: Record<string, unknown>, chi
     case "MONSTERCHEF_CHOICE":
       return `${safeName} picked ${choiceLabel || choiceValue || "an option"} in Monster Chef.`;
     case "SPEAKTO_STORYBOOK_PAGE":
-      return `${safeName} opened story page ${pageId || ""}.`.trim();
+      return `${safeName} opened a storybook page.`;
     case "SPEAKTO_STORYBOOK_CHOICE":
-      return `${safeName} chose ${choiceValue || "an option"} in the story.`;
+      return `${safeName} made a story choice.`;
     default:
-      return `${safeName} triggered ${humanizeLabel(eventType)}.`;
+      return `${safeName} had a ${humanizeLabel(eventType).toLowerCase()} moment.`;
   }
+}
+
+function categoryFor(eventType: string) {
+  if (eventType.includes("word")) return { label: "Speaking", icon: "💬", className: "gb-report-blue" };
+  if (eventType.includes("emotion")) return { label: "Emotion", icon: "😊", className: "gb-report-green" };
+  if (eventType.includes("coloring")) return { label: "Creativity", icon: "🎨", className: "gb-report-pink" };
+  if (eventType.includes("STORYBOOK")) return { label: "Story", icon: "📖", className: "gb-report-purple" };
+  if (eventType.includes("MONSTERCHEF")) return { label: "Game", icon: "🎮", className: "gb-report-orange" };
+  return { label: "Activity", icon: "✨", className: "gb-report-soft" };
 }
 
 export default function ChildDetailPage({ params }: { params: { id: string } }) {
@@ -198,15 +172,10 @@ export default function ChildDetailPage({ params }: { params: { id: string } }) 
   async function load() {
     setLoading(true);
     setError(null);
-
     try {
       const response = await fetch(`/api/dashboard/overview?childId=${params.id}`, { cache: "no-store" });
       const json = await response.json();
-
-      if (!response.ok || !json.ok) {
-        throw new Error(json.error || "Failed to load child detail.");
-      }
-
+      if (!response.ok || !json.ok) throw new Error(json.error || "Failed to load child detail.");
       setData(json);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
@@ -215,139 +184,131 @@ export default function ChildDetailPage({ params }: { params: { id: string } }) 
     }
   }
 
-  useEffect(() => {
-    load();
-  }, [params.id]);
+  useEffect(() => { load(); }, [params.id]);
 
   const child = data?.children?.[0] ?? null;
-
-  const filteredWords = useMemo(() => {
-    return (data?.deepDive.words ?? []).filter((item) => !isSystemWord(item.word));
-  }, [data]);
-
+  const filteredWords = useMemo(() => (data?.deepDive.words ?? []).filter((item) => !isSystemWord(item.word)), [data]);
   const latestRealWord = filteredWords[0]?.word ?? null;
   const lastSeen = child?.lastActivityAt ?? data?.summary?.lastActivityAt ?? null;
   const deviceOnline = Boolean(lastSeen && Date.now() - new Date(lastSeen).getTime() < 1000 * 60 * 10);
+  const latestEmotion = child?.latestEmotion ?? data?.summary.latestEmotion ?? null;
+  const latestMood = humanizeLabel(latestEmotion);
+  const moodEmoji = emotionEmoji[(latestEmotion ?? "").toLowerCase()] ?? "😊";
+  const recentEmotionList = (data?.deepDive.emotions ?? []).slice(0, 7).reverse();
+  const uniqueWords = Array.from(new Set(filteredWords.map((item) => item.word).filter(Boolean) as string[])).slice(0, 8);
 
   return (
-    <div style={{ padding: 32, maxWidth: 1240, margin: "0 auto", display: "grid", gap: 20, background: BG, minHeight: "100vh" }}>
-      <div>
-        <div style={{ color: BRAND, fontWeight: 800, marginBottom: 8 }}>Child Detail</div>
-        <h1 style={{ marginBottom: 8, color: TEXT }}>{child?.name ?? "Child"}</h1>
-        <p style={{ marginTop: 0, color: TEXT_MUTED, maxWidth: 760 }}>
-          Parent-friendly view of linked device status, recent learning activity, spoken words, emotions, storybook events, and saved colouring work.
-        </p>
-        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
-          <a href="/children" style={{ color: BRAND, fontWeight: 600 }}>Back to Children</a>
-          <a href="/dashboard" style={{ color: BRAND, fontWeight: 600 }}>Dashboard</a>
-          <button onClick={load} style={buttonStyle}>Refresh Child</button>
+    <div className="gb-page">
+      <header className="gb-nav">
+        <div className="gb-container gb-nav-inner">
+          <a className="gb-brand" href="/children">
+            <img className="gb-logo" src="/gigglebox-logo.png" alt="GiggleBox" />
+            <span><span className="gb-brand-kicker">Parent Report</span><span className="gb-brand-title">{child?.name ?? "Child"}</span></span>
+          </a>
+          <nav className="gb-nav-links">
+            <a className="gb-nav-link" href="/">Home</a>
+            <a className="gb-nav-link" href="/children">Children</a>
+            <a className="gb-button" href="/setup">Setup</a>
+          </nav>
         </div>
-      </div>
+      </header>
 
-      {loading ? <p>Loading child detail…</p> : null}
-      {error ? <p style={{ color: "crimson" }}>{error}</p> : null}
+      <main className="gb-main">
+        <div className="gb-container gb-grid">
+          {loading ? <div className="gb-card">Loading child report…</div> : null}
+          {error ? <div className="gb-alert">{error}</div> : null}
 
-      {data && child ? (
-        <>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14 }}>
-            <div style={card}><div style={{ color: TEXT_MUTED }}>Age</div><div style={statValue}>{child.age ?? "—"}</div></div>
-            <div style={card}><div style={{ color: TEXT_MUTED }}>Events</div><div style={statValue}>{child.totalEvents}</div></div>
-            <div style={card}><div style={{ color: TEXT_MUTED }}>Latest Emotion</div><div style={{ ...statValue, fontSize: 24 }}>{child.latestEmotion ? humanizeLabel(child.latestEmotion) : "—"}</div></div>
-            <div style={card}><div style={{ color: TEXT_MUTED }}>Latest Spoken Word</div><div style={{ ...statValue, fontSize: 24 }}>{latestRealWord ?? "—"}</div><div style={{ color: TEXT_MUTED, marginTop: 8, fontSize: 13 }}>System test words are hidden</div></div>
-            <div style={card}><div style={{ color: TEXT_MUTED }}>Colouring Saves</div><div style={statValue}>{data.summary.coloringSaveCount}</div></div>
-            <div style={card}>
-              <div style={{ color: TEXT_MUTED }}>Linked Device</div>
-              <div style={{ fontSize: 20, fontWeight: 800, marginTop: 10 }}>{child.linkedDevice?.device_name ?? "Not linked"}</div>
-              <div style={{ marginTop: 10, display: "inline-flex", alignItems: "center", gap: 8, padding: "6px 10px", borderRadius: 999, background: deviceOnline ? "#ecfdf3" : "#fef3f2", color: deviceOnline ? "#027a48" : "#b42318", fontWeight: 700, fontSize: 13 }}>
-                <span style={{ width: 8, height: 8, borderRadius: 999, background: deviceOnline ? "#12b76a" : "#f04438", display: "inline-block" }} />
-                {deviceOnline ? "Online" : "Offline"}
-              </div>
-              <div style={{ color: TEXT_MUTED, marginTop: 8, fontSize: 13 }}>Last seen {formatRelative(lastSeen)} · {formatDateTime(lastSeen)}</div>
-            </div>
-          </div>
-
-          <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1.35fr) minmax(320px, 0.95fr)", gap: 16, alignItems: "start" }}>
-            <div style={card}>
-              <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
-                <h2 style={{ marginTop: 0, marginBottom: 0 }}>Recent Child Activity</h2>
-                <span style={{ color: TEXT_MUTED, fontSize: 13 }}>{data.recentActivity.length} recent events</span>
-              </div>
-
-              {data.recentActivity.length === 0 ? (
-                <p>No activity for this child yet.</p>
-              ) : (
-                <div style={{ display: "grid", gap: 12, marginTop: 14 }}>
-                  {data.recentActivity.map((event) => (
-                    <div key={event.id} style={{ borderTop: "1px solid #eef2f7", paddingTop: 12 }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start" }}>
-                        <div>
-                          <div style={{ display: "inline-flex", padding: "4px 10px", borderRadius: 999, background: eventTone(event.eventType), fontSize: 12, fontWeight: 700, color: TEXT }}>
-                            {humanizeLabel(event.eventType)}
-                          </div>
-                          <div style={{ marginTop: 8, fontWeight: 700, color: TEXT }}>{summarizeEvent(event.eventType, event.payload, child.name)}</div>
-                        </div>
-                        <span style={{ color: TEXT_MUTED, fontSize: 13, whiteSpace: "nowrap" }}>{formatDateTime(event.createdAt ?? event.occurredAt)}</span>
-                      </div>
-                      <pre style={{ marginTop: 10, padding: 12, background: "#f8fafc", borderRadius: 12, whiteSpace: "pre-wrap", overflowX: "auto", fontSize: 12, color: "#344054" }}>
-                        {JSON.stringify(event.payload, null, 2)}
-                      </pre>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div style={{ display: "grid", gap: 16 }}>
-              <div style={card}>
-                <h2 style={{ marginTop: 0 }}>Words Spoken</h2>
-                {filteredWords.length === 0 ? (
-                  <p>No spoken words yet.</p>
-                ) : (
-                  <ul style={{ margin: 0, paddingLeft: 18, display: "grid", gap: 8 }}>
-                    {filteredWords.slice(0, 12).map((item) => (
-                      <li key={item.id}>
-                        <strong>{item.word ?? "unknown"}</strong> <span style={{ color: TEXT_MUTED }}>· {formatDateTime(item.createdAt)}</span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-
-              <div style={card}>
-                <h2 style={{ marginTop: 0 }}>Emotion Timeline</h2>
-                {data.deepDive.emotions.length === 0 ? (
-                  <p>No emotion signals yet.</p>
-                ) : (
-                  <ul style={{ margin: 0, paddingLeft: 18, display: "grid", gap: 8 }}>
-                    {data.deepDive.emotions.slice(0, 12).map((item) => (
-                      <li key={item.id}>
-                        <strong>{humanizeLabel(item.emotion)}</strong> <span style={{ color: TEXT_MUTED }}>· {formatDateTime(item.createdAt)}</span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-
-              <div style={card}>
-                <h2 style={{ marginTop: 0 }}>Saved Artwork</h2>
-                {data.deepDive.savedArtwork.length === 0 ? (
-                  <p>No saved artwork yet.</p>
-                ) : (
-                  <div style={{ display: "grid", gap: 12 }}>
-                    {data.deepDive.savedArtwork.slice(0, 8).map((art) => (
-                      <div key={art.id} style={{ paddingBottom: 10, borderBottom: "1px solid #eef2f7" }}>
-                        <strong>{art.title ?? art.page ?? "Saved artwork"}</strong>
-                        <div style={{ color: TEXT_MUTED, fontSize: 13, marginTop: 4 }}>Saved {formatDateTime(art.createdAt)}</div>
-                        <div style={{ color: TEXT_MUTED, fontSize: 13 }}>Image: {art.imageUrl ?? "No image reference yet"}</div>
-                      </div>
-                    ))}
+          {data && child ? (
+            <>
+              <section className="gb-report-hero">
+                <div>
+                  <div className="gb-eyebrow">Today&apos;s check-in</div>
+                  <h1>{child.name}&apos;s GiggleBox report</h1>
+                  <p>Clear parent-friendly insights from play, speaking, emotions, stories, and creative work.</p>
+                  <div className="gb-actions">
+                    <a className="gb-button-secondary" href="/children">Back to Children</a>
+                    <button className="gb-button" onClick={load}>Refresh Report</button>
                   </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </>
-      ) : null}
+                </div>
+                <div className="gb-mood-card">
+                  <span>Current mood</span>
+                  <strong>{latestMood}</strong>
+                  <div className="gb-mood-emoji">{moodEmoji}</div>
+                  <small>Checked {formatRelative(lastSeen)} · {formatDateTime(lastSeen)}</small>
+                </div>
+              </section>
+
+              <section className="gb-report-stats">
+                <div className="gb-report-stat"><span>Age</span><strong>{child.age ?? "—"}</strong></div>
+                <div className="gb-report-stat"><span>Play moments</span><strong>{child.totalEvents}</strong></div>
+                <div className="gb-report-stat"><span>Words practised</span><strong>{filteredWords.length}</strong></div>
+                <div className="gb-report-stat"><span>Colouring saves</span><strong>{data.summary.coloringSaveCount}</strong></div>
+                <div className="gb-report-stat"><span>Device</span><strong>{deviceOnline ? "Online" : "Offline"}</strong><small>{child.linkedDevice?.device_name ?? "Not linked"}</small></div>
+              </section>
+
+              <section className="gb-report-layout">
+                <div className="gb-card gb-report-card-large">
+                  <div className="gb-report-card-head">
+                    <div><span className="gb-pill">Mood trend</span><h2>Emotions over recent play</h2></div>
+                    <span className={deviceOnline ? "gb-status-online" : "gb-status-offline"}>{deviceOnline ? "Live" : "Offline"}</span>
+                  </div>
+                  {recentEmotionList.length === 0 ? (
+                    <p className="gb-muted">No emotion check-ins yet.</p>
+                  ) : (
+                    <div className="gb-mood-trend">
+                      {recentEmotionList.map((item, index) => {
+                        const key = (item.emotion ?? "").toLowerCase();
+                        return <div key={item.id} className="gb-mood-point" style={{ transform: `translateY(${index % 3 === 0 ? 12 : index % 3 === 1 ? -8 : 2}px)` }}><span>{emotionEmoji[key] ?? "😊"}</span><small>{formatDateTime(item.createdAt)}</small></div>;
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                <div className="gb-card gb-report-card-large">
+                  <div className="gb-report-card-head"><div><span className="gb-pill">Words spoken</span><h2>Language practice</h2></div></div>
+                  {uniqueWords.length === 0 ? <p className="gb-muted">No spoken words yet.</p> : <div className="gb-word-cloud">{uniqueWords.map((word) => <span key={word}>{word}</span>)}</div>}
+                </div>
+              </section>
+
+              <section className="gb-report-layout">
+                <div className="gb-card">
+                  <div className="gb-report-card-head"><div><span className="gb-pill">Recent activity</span><h2>What happened lately</h2></div><small>{data.recentActivity.length} recent events</small></div>
+                  {data.recentActivity.length === 0 ? <p className="gb-muted">No activity for this child yet.</p> : (
+                    <div className="gb-timeline">
+                      {data.recentActivity.slice(0, 10).map((event) => {
+                        const category = categoryFor(event.eventType);
+                        return (
+                          <div className="gb-timeline-item" key={event.id}>
+                            <div className={`gb-timeline-icon ${category.className}`}>{category.icon}</div>
+                            <div>
+                              <div className="gb-timeline-top"><strong>{category.label}</strong><span>{formatDateTime(event.createdAt ?? event.occurredAt)}</span></div>
+                              <p>{summarizeEvent(event.eventType, event.payload, child.name)}</p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                <div className="gb-card">
+                  <div className="gb-report-card-head"><div><span className="gb-pill">Creative work</span><h2>Saved artwork</h2></div></div>
+                  {data.deepDive.savedArtwork.length === 0 ? <p className="gb-muted">No saved artwork yet.</p> : (
+                    <div className="gb-art-list">
+                      {data.deepDive.savedArtwork.slice(0, 6).map((art) => (
+                        <div className="gb-art-item" key={art.id}>
+                          <div className="gb-art-thumb">🎨</div>
+                          <div><strong>{art.title ?? art.page ?? "Saved artwork"}</strong><small>Saved {formatDateTime(art.createdAt)}</small></div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </section>
+            </>
+          ) : null}
+        </div>
+      </main>
     </div>
   );
 }

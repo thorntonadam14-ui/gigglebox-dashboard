@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from "next";
 import PwaRegistrar from "./components/PwaRegistrar";
-import "./globals.css";
 
 export const metadata: Metadata = {
   title: "GiggleBox Dashboard",

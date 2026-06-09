@@ -221,3 +221,222 @@ button:disabled { cursor: not-allowed; opacity: .58; }
 @media (max-width: 560px) {
   .gb-logo { width: 84px; height: 40px; }
 }
+
+/* Mobile responsiveness patch - GiggleBox dashboard v10 */
+html, body {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+img, svg, video, canvas {
+  max-width: 100%;
+}
+.gb-page {
+  overflow-x: hidden;
+}
+@media (max-width: 920px) {
+  .gb-container {
+    width: min(100% - 24px, 1160px);
+  }
+  .gb-nav-inner {
+    min-height: auto;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 0;
+  }
+  .gb-brand {
+    min-width: 0;
+    gap: 10px;
+  }
+  .gb-brand > span {
+    min-width: 0;
+  }
+  .gb-brand-title {
+    white-space: normal;
+  }
+  .gb-nav-links {
+    order: 3;
+    grid-column: 1 / -1;
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(104px, 1fr));
+    gap: 8px;
+  }
+  .gb-nav-link,
+  .gb-button,
+  .gb-button-secondary {
+    width: 100%;
+    min-height: 42px;
+    padding: 10px 12px;
+    text-align: center;
+  }
+  .gb-studio-mark {
+    order: 2;
+    justify-self: end;
+    padding: 4px 6px;
+  }
+  .gb-studio-mark img {
+    width: 108px;
+    max-height: 42px;
+  }
+  .gb-main {
+    padding: 18px 0 42px;
+  }
+  .gb-hero,
+  .gb-report-hero {
+    grid-template-columns: 1fr;
+    padding: 24px;
+    border-radius: 28px;
+    gap: 18px;
+  }
+  .gb-report-layout,
+  .gb-two,
+  .gb-three {
+    grid-template-columns: 1fr;
+  }
+  .gb-report-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .gb-container {
+    width: min(100% - 18px, 1160px);
+  }
+  .gb-nav-inner {
+    grid-template-columns: 1fr;
+    justify-items: stretch;
+  }
+  .gb-brand {
+    width: 100%;
+  }
+  .gb-logo {
+    width: 86px;
+    height: 40px;
+    padding: 4px 6px;
+    border-radius: 12px;
+  }
+  .gb-brand-kicker {
+    font-size: 10px;
+  }
+  .gb-brand-title {
+    font-size: 16px;
+    line-height: 1.05;
+  }
+  .gb-studio-mark {
+    justify-self: start;
+    max-width: 100%;
+  }
+  .gb-studio-mark img {
+    width: 96px;
+    max-height: 36px;
+  }
+  .gb-nav-links {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .gb-nav-links .gb-button:last-child:nth-child(odd),
+  .gb-nav-links .gb-nav-link:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+  .gb-title {
+    font-size: 42px;
+  }
+  .gb-title-sm,
+  .gb-report-hero h1 {
+    font-size: 32px;
+    line-height: 1.05;
+  }
+  .gb-lede,
+  .gb-report-hero p {
+    font-size: 16px;
+    line-height: 1.5;
+  }
+  .gb-hero,
+  .gb-report-hero,
+  .gb-card {
+    padding: 18px;
+    border-radius: 24px;
+  }
+  .gb-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+    width: 100%;
+  }
+  .gb-report-stats {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .gb-report-stat {
+    min-height: 110px;
+    padding: 18px;
+  }
+  .gb-report-stat strong {
+    font-size: 28px;
+  }
+  .gb-mood-card {
+    min-height: 190px;
+    padding: 18px;
+  }
+  .gb-mood-card strong {
+    font-size: 36px;
+    padding-right: 92px;
+  }
+  .gb-mood-emoji {
+    width: 82px;
+    height: 82px;
+    font-size: 48px;
+    right: 16px;
+    top: 22px;
+  }
+  .gb-report-card-head,
+  .gb-report-card-head-select,
+  .gb-timeline-top {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .gb-report-filter,
+  .gb-select {
+    width: 100%;
+  }
+  .gb-select {
+    border-radius: 16px;
+  }
+  .gb-mood-trend {
+    padding: 14px;
+    gap: 10px;
+    -webkit-overflow-scrolling: touch;
+  }
+  .gb-mood-point {
+    min-width: 62px;
+  }
+  .gb-mood-point span {
+    width: 44px;
+    height: 44px;
+    font-size: 24px;
+  }
+  .gb-word-cloud span {
+    padding: 9px 11px;
+    font-size: 14px;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+  .gb-timeline-item,
+  .gb-art-item {
+    grid-template-columns: 44px minmax(0, 1fr);
+    gap: 10px;
+    padding: 12px;
+  }
+  .gb-timeline-icon,
+  .gb-art-thumb {
+    width: 44px;
+    height: 44px;
+    border-radius: 14px;
+    font-size: 21px;
+  }
+  .gb-timeline-item p,
+  .gb-art-item strong,
+  .gb-art-item small {
+    overflow-wrap: anywhere;
+  }
+}

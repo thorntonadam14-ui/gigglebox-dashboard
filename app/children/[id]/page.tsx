@@ -2,6 +2,28 @@
 
 import { useEffect, useMemo, useState } from "react";
 
+type ParentInsights = {
+  notes: string[];
+  transcript: Array<{
+    id: string;
+    speaker: string;
+    text: string;
+    eventType: string;
+    createdAt: string | null;
+  }>;
+  deepDive: {
+    topicSummary: Array<{ label: string; count: number }>;
+    emotionSummary: Array<{ label: string; count: number }>;
+    wellbeingSignals: Array<{ id: string; text: string; topic: string | null; emotion: string | null; createdAt: string | null }>;
+    unknownQuestions: Array<{ id: string; question: string; topic: string | null; createdAt: string | null }>;
+    aiNeededCount: number;
+    conversationDurationMinutes: number;
+  };
+  coaching: string[];
+  highlights: Array<{ id: string; kind: string; title: string; detail: string; createdAt: string | null }>;
+  chapters: Array<{ id: string; title: string; startAt: string | null; endAt: string | null; count: number; summary: string }>;
+};
+
 type Overview = {
   ok: boolean;
   filters: { childId: string | null };
@@ -42,6 +64,7 @@ type Overview = {
     occurredAt: string | null;
     createdAt: string | null;
   }>;
+  parentInsights?: ParentInsights;
   deepDive: {
     words: Array<{
       id: string;
@@ -85,8 +108,23 @@ const emotionEmoji: Record<string, string> = {
   neutral: "😐",
   concerned: "😟",
   sad: "😔",
-  curious: "🤔"
+  curious: "🤔",
+  worried: "😟",
+  angry: "😠",
+  scared: "😧",
+  tired: "😴"
 };
+
+const insightTabs = [
+  { id: "notes", label: "Notes" },
+  { id: "transcript", label: "Transcript" },
+  { id: "deep-dive", label: "Deep Dive" },
+  { id: "coaching", label: "Coaching" },
+  { id: "highlights", label: "Highlights" },
+  { id: "timeline", label: "Timeline" }
+] as const;
+
+type InsightTab = typeof insightTabs[number]["id"];
 
 function formatDateTime(value: string | null | undefined) {
   if (!value) return "—";
@@ -98,6 +136,13 @@ function formatDateTime(value: string | null | undefined) {
     hour: "2-digit",
     minute: "2-digit"
   }).format(date);
+}
+
+function formatTime(value: string | null | undefined) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit" }).format(date);
 }
 
 function formatRelative(value: string | null | undefined) {
@@ -131,6 +176,8 @@ function summarizeEvent(eventType: string, payload: Record<string, unknown>, chi
   const safeName = childName || "This child";
   const word = typeof payload.word === "string" ? payload.word : null;
   const emotion = typeof payload.emotion === "string" ? payload.emotion : null;
+  const topic = typeof payload.topic === "string" ? payload.topic : null;
+  const insight = typeof payload.insight === "string" ? payload.insight : null;
   const choiceValue = typeof payload.value === "string" ? payload.value : null;
   const choiceLabel = typeof payload.choice_label === "string" ? payload.choice_label : null;
   const saveTitle = typeof payload.title === "string" ? payload.title : null;
@@ -140,6 +187,11 @@ function summarizeEvent(eventType: string, payload: Record<string, unknown>, chi
       return word ? `${safeName} said “${word}”.` : `${safeName} practised speaking.`;
     case "emotion_state":
       return emotion ? `${safeName} checked in as ${humanizeLabel(emotion)}.` : `${safeName} shared an emotion.`;
+    case "askme_parent_insight":
+    case "askme_conversation_signal":
+      return insight || `${safeName} shared a Parent Insights signal${topic ? ` about ${humanizeLabel(topic).toLowerCase()}` : ""}.`;
+    case "askme_unknown_question":
+      return word ? `${safeName} asked a question Bop could not answer yet: “${word}”.` : `${safeName} asked a question Bop could not answer yet.`;
     case "coloring_saved":
       return `${safeName} saved ${saveTitle || "a colouring page"}.`;
     case "MONSTERCHEF_START":
@@ -166,6 +218,8 @@ function getArtworkImageUrl(art: Overview["deepDive"]["savedArtwork"][number]) {
 }
 
 function categoryFor(eventType: string) {
+  if (eventType.includes("parent_insight") || eventType.includes("conversation_signal")) return { label: "Insight", icon: "💡", className: "gb-report-purple" };
+  if (eventType.includes("unknown") || eventType.includes("ai_needed")) return { label: "Learning Gap", icon: "❓", className: "gb-report-orange" };
   if (eventType.includes("word")) return { label: "Speaking", icon: "💬", className: "gb-report-blue" };
   if (eventType.includes("emotion")) return { label: "Emotion", icon: "😊", className: "gb-report-green" };
   if (eventType.includes("coloring")) return { label: "Creativity", icon: "🎨", className: "gb-report-pink" };
@@ -174,11 +228,30 @@ function categoryFor(eventType: string) {
   return { label: "Activity", icon: "✨", className: "gb-report-soft" };
 }
 
+function defaultParentInsights(childName: string): ParentInsights {
+  return {
+    notes: [`${childName} has activity in the report. Parent Insights will become richer as Ask Me sends more conversation signals.`],
+    transcript: [],
+    deepDive: {
+      topicSummary: [],
+      emotionSummary: [],
+      wellbeingSignals: [],
+      unknownQuestions: [],
+      aiNeededCount: 0,
+      conversationDurationMinutes: 0
+    },
+    coaching: ["Use the recent activity and transcript as a gentle conversation starter."],
+    highlights: [],
+    chapters: []
+  };
+}
+
 export default function ChildDetailPage({ params }: { params: { id: string } }) {
   const [data, setData] = useState<Overview | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activityFilter, setActivityFilter] = useState("all");
+  const [activeInsightTab, setActiveInsightTab] = useState<InsightTab>("notes");
 
   async function load() {
     setLoading(true);
@@ -199,7 +272,6 @@ export default function ChildDetailPage({ params }: { params: { id: string } }) 
 
   const child = data?.children?.[0] ?? null;
   const filteredWords = useMemo(() => (data?.deepDive.words ?? []).filter((item) => !isSystemWord(item.word)), [data]);
-  const latestRealWord = filteredWords[0]?.word ?? null;
   const lastSeen = child?.lastActivityAt ?? data?.summary?.lastActivityAt ?? null;
   const deviceOnline = Boolean(lastSeen && Date.now() - new Date(lastSeen).getTime() < 1000 * 60 * 10);
   const latestEmotion = child?.latestEmotion ?? data?.summary.latestEmotion ?? null;
@@ -210,8 +282,9 @@ export default function ChildDetailPage({ params }: { params: { id: string } }) 
   const filteredRecentActivity = useMemo(() => {
     const items = data?.recentActivity ?? [];
     if (activityFilter === "all") return items;
-    return items.filter((event) => categoryFor(event.eventType).label.toLowerCase() === activityFilter);
+    return items.filter((event) => categoryFor(event.eventType).label.toLowerCase().replace(/\s+/g, "-") === activityFilter);
   }, [data, activityFilter]);
+  const parentInsights = data?.parentInsights ?? defaultParentInsights(child?.name ?? "This child");
 
   return (
     <div className="gb-page">
@@ -219,7 +292,7 @@ export default function ChildDetailPage({ params }: { params: { id: string } }) 
         <div className="gb-container gb-nav-inner">
           <a className="gb-brand" href="/children">
             <img className="gb-logo" src="/gigglebox-logo.png" alt="GiggleBox" />
-            <span><span className="gb-brand-kicker">Parent Report</span><span className="gb-brand-title">{child?.name ?? "Child"}</span></span>
+            <span><span className="gb-brand-kicker">Parent Insights</span><span className="gb-brand-title">{child?.name ?? "Child"}</span></span>
           </a>
           <nav className="gb-nav-links">
             <a className="gb-nav-link" href="/">Home</a>
@@ -234,19 +307,19 @@ export default function ChildDetailPage({ params }: { params: { id: string } }) 
 
       <main className="gb-main">
         <div className="gb-container gb-grid">
-          {loading ? <div className="gb-card">Loading child report…</div> : null}
+          {loading ? <div className="gb-card">Loading Parent Insights…</div> : null}
           {error ? <div className="gb-alert">{error}</div> : null}
 
           {data && child ? (
             <>
-              <section className="gb-report-hero">
+              <section className="gb-report-hero gb-parent-insights-hero">
                 <div>
-                  <div className="gb-eyebrow">Today&apos;s check-in</div>
-                  <h1>{child.name}&apos;s GiggleBox report</h1>
-                  <p>Clear parent-friendly insights from play, speaking, emotions, stories, and creative work.</p>
+                  <div className="gb-eyebrow">Parent Insights</div>
+                  <h1>{child.name}&apos;s Conversation Report</h1>
+                  <p>Parent-friendly notes, transcript, topics, coaching and highlights from GiggleBox Ask Me conversations and play activity.</p>
                   <div className="gb-actions">
                     <a className="gb-button-secondary" href="/children">Back to Children</a>
-                    <button className="gb-button" onClick={load}>Refresh Report</button>
+                    <button className="gb-button" onClick={load}>Refresh Insights</button>
                   </div>
                 </div>
                 <div className="gb-mood-card">
@@ -260,9 +333,103 @@ export default function ChildDetailPage({ params }: { params: { id: string } }) 
               <section className="gb-report-stats">
                 <div className="gb-report-stat"><span>Age</span><strong>{child.age ?? "—"}</strong></div>
                 <div className="gb-report-stat"><span>Play moments</span><strong>{child.totalEvents}</strong></div>
-                <div className="gb-report-stat"><span>Words practised</span><strong>{filteredWords.length}</strong></div>
-                <div className="gb-report-stat"><span>Colouring saves</span><strong>{data.summary.coloringSaveCount}</strong></div>
+                <div className="gb-report-stat"><span>Topics found</span><strong>{parentInsights.deepDive.topicSummary.length}</strong></div>
+                <div className="gb-report-stat"><span>Wellbeing signals</span><strong>{parentInsights.deepDive.wellbeingSignals.length}</strong><small>Gentle check-in prompts</small></div>
                 <div className="gb-report-stat"><span>Device</span><strong>{deviceOnline ? "Online" : "Offline"}</strong><small>{child.linkedDevice?.device_name ?? "Not linked"}</small></div>
+              </section>
+
+              <section className="gb-card gb-parent-insights-card">
+                <div className="gb-insight-tabs" role="tablist" aria-label="Parent Insights sections">
+                  {insightTabs.map((tab) => (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={activeInsightTab === tab.id}
+                      className={activeInsightTab === tab.id ? "gb-insight-tab gb-insight-tab-active" : "gb-insight-tab"}
+                      onClick={() => setActiveInsightTab(tab.id)}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="gb-insight-panel">
+                  {activeInsightTab === "notes" ? (
+                    <div className="gb-notes-list">
+                      {parentInsights.notes.map((note, index) => <p key={index}>{note}</p>)}
+                    </div>
+                  ) : null}
+
+                  {activeInsightTab === "transcript" ? (
+                    parentInsights.transcript.length === 0 ? <p className="gb-muted">No Ask Me transcript lines have been received yet.</p> : (
+                      <div className="gb-transcript-list">
+                        {parentInsights.transcript.map((line) => (
+                          <div className="gb-transcript-line" key={line.id}>
+                            <span>{formatTime(line.createdAt)}</span>
+                            <strong>{line.speaker}</strong>
+                            <p>{line.text}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )
+                  ) : null}
+
+                  {activeInsightTab === "deep-dive" ? (
+                    <div className="gb-deep-dive-grid">
+                      <div className="gb-insight-subcard">
+                        <h3>Topics mentioned</h3>
+                        {parentInsights.deepDive.topicSummary.length === 0 ? <p className="gb-muted">No topic signals yet.</p> : <div className="gb-chip-list">{parentInsights.deepDive.topicSummary.map((item) => <span key={item.label}>{humanizeLabel(item.label)} <b>{item.count}</b></span>)}</div>}
+                      </div>
+                      <div className="gb-insight-subcard">
+                        <h3>Emotion signals</h3>
+                        {parentInsights.deepDive.emotionSummary.length === 0 ? <p className="gb-muted">No emotion signals yet.</p> : <div className="gb-chip-list">{parentInsights.deepDive.emotionSummary.map((item) => <span key={item.label}>{emotionEmoji[item.label] ?? "😊"} {humanizeLabel(item.label)} <b>{item.count}</b></span>)}</div>}
+                      </div>
+                      <div className="gb-insight-subcard gb-insight-wide">
+                        <h3>Questions Bop could not answer yet</h3>
+                        {parentInsights.deepDive.unknownQuestions.length === 0 ? <p className="gb-muted">No unknown questions logged yet.</p> : parentInsights.deepDive.unknownQuestions.slice(0, 8).map((item) => <p key={item.id}><span className="gb-time-pill">{formatTime(item.createdAt)}</span> {item.question}</p>)}
+                      </div>
+                      <div className="gb-insight-subcard gb-insight-wide">
+                        <h3>Wellbeing signals</h3>
+                        {parentInsights.deepDive.wellbeingSignals.length === 0 ? <p className="gb-muted">No wellbeing signals logged yet.</p> : parentInsights.deepDive.wellbeingSignals.slice(0, 8).map((item) => <p key={item.id}><span className="gb-time-pill">{formatTime(item.createdAt)}</span> {item.text}</p>)}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {activeInsightTab === "coaching" ? (
+                    <div className="gb-coaching-list">
+                      {parentInsights.coaching.map((item, index) => <div className="gb-coaching-item" key={index}><span>💜</span><p>{item}</p></div>)}
+                    </div>
+                  ) : null}
+
+                  {activeInsightTab === "highlights" ? (
+                    parentInsights.highlights.length === 0 ? <p className="gb-muted">No highlights yet. They will appear as Ask Me logs topics, emotions and wellbeing moments.</p> : (
+                      <div className="gb-highlight-list">
+                        {parentInsights.highlights.map((item) => (
+                          <div className="gb-highlight-item" key={item.id}>
+                            <span className="gb-time-pill">{formatTime(item.createdAt)}</span>
+                            <strong>{item.title}</strong>
+                            <p>{item.detail}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )
+                  ) : null}
+
+                  {activeInsightTab === "timeline" ? (
+                    parentInsights.chapters.length === 0 ? <p className="gb-muted">No timeline chapters yet.</p> : (
+                      <div className="gb-chapter-list">
+                        {parentInsights.chapters.map((chapter) => (
+                          <div className="gb-chapter-item" key={chapter.id}>
+                            <span className="gb-time-pill">{formatTime(chapter.startAt)}{chapter.endAt && chapter.endAt !== chapter.startAt ? ` – ${formatTime(chapter.endAt)}` : ""}</span>
+                            <strong>{chapter.title}</strong>
+                            <p>{chapter.summary}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )
+                  ) : null}
+                </div>
               </section>
 
               <section className="gb-report-layout">
@@ -299,6 +466,8 @@ export default function ChildDetailPage({ params }: { params: { id: string } }) 
                         <option value="all">All activity</option>
                         <option value="speaking">Speaking</option>
                         <option value="emotion">Emotions</option>
+                        <option value="insight">Insights</option>
+                        <option value="learning-gap">Learning gaps</option>
                         <option value="creativity">Creative work</option>
                         <option value="story">Stories</option>
                         <option value="game">Games</option>

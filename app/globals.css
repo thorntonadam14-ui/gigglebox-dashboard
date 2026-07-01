@@ -440,3 +440,196 @@ img, svg, video, canvas {
     overflow-wrap: anywhere;
   }
 }
+
+/* Parent Insights report upgrade */
+.gb-parent-insights-hero {
+  background:
+    radial-gradient(circle at 84% 18%, rgba(255, 214, 102, .34), transparent 28%),
+    radial-gradient(circle at 68% 74%, rgba(0, 178, 247, .16), transparent 32%),
+    linear-gradient(135deg, rgba(255,255,255,.97), rgba(246,243,255,.96));
+}
+.gb-parent-insights-card {
+  padding: 0;
+  overflow: hidden;
+  border-radius: 30px;
+}
+.gb-insight-tabs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 12px;
+  border-bottom: 1px solid var(--gb-line);
+  background: rgba(255,255,255,.86);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.gb-insight-tab {
+  appearance: none;
+  border: 0;
+  border-radius: 18px;
+  background: transparent;
+  color: #545382;
+  padding: 14px 18px;
+  font-weight: 900;
+  font-size: 16px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.gb-insight-tab:hover {
+  background: #f7f4ff;
+  color: var(--gb-purple-dark);
+}
+.gb-insight-tab-active {
+  background: linear-gradient(180deg, #eee7ff, #e4dcff);
+  color: var(--gb-purple-dark);
+  box-shadow: inset 0 -3px 0 rgba(125,64,255,.22);
+}
+.gb-insight-panel {
+  padding: 26px;
+}
+.gb-notes-list {
+  display: grid;
+  gap: 14px;
+}
+.gb-notes-list p {
+  margin: 0;
+  padding: 18px 20px;
+  border: 1px solid #eee8ff;
+  border-radius: 22px;
+  background: linear-gradient(135deg, #fff, #fbf9ff);
+  color: var(--gb-text);
+  font-size: 18px;
+  line-height: 1.55;
+}
+.gb-transcript-list,
+.gb-highlight-list,
+.gb-chapter-list,
+.gb-coaching-list {
+  display: grid;
+  gap: 12px;
+}
+.gb-transcript-line {
+  display: grid;
+  grid-template-columns: 74px 110px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  padding: 14px;
+  border: 1px solid #eef2f7;
+  border-radius: 18px;
+  background: #fff;
+}
+.gb-transcript-line span,
+.gb-time-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: fit-content;
+  border-radius: 999px;
+  padding: 5px 9px;
+  background: #f1f5f9;
+  color: #667085;
+  font-size: 12px;
+  font-weight: 900;
+}
+.gb-transcript-line strong {
+  color: var(--gb-ink);
+}
+.gb-transcript-line p {
+  margin: 0;
+  color: var(--gb-text);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.gb-deep-dive-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+.gb-insight-subcard {
+  padding: 18px;
+  border-radius: 22px;
+  border: 1px solid #eef2f7;
+  background: linear-gradient(180deg, #fff, #fbfcff);
+}
+.gb-insight-wide {
+  grid-column: 1 / -1;
+}
+.gb-insight-subcard h3 {
+  margin: 0 0 14px;
+  color: var(--gb-ink);
+  letter-spacing: -.02em;
+}
+.gb-insight-subcard p {
+  color: var(--gb-text);
+  line-height: 1.45;
+  margin: 10px 0 0;
+}
+.gb-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.gb-chip-list span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 12px;
+  border-radius: 999px;
+  background: #f3f0ff;
+  color: var(--gb-purple-dark);
+  font-weight: 900;
+}
+.gb-chip-list b {
+  display: inline-grid;
+  place-items: center;
+  min-width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: #fff;
+  color: var(--gb-ink);
+  box-shadow: var(--gb-shadow-soft);
+}
+.gb-coaching-item {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 12px;
+  padding: 16px;
+  border-radius: 20px;
+  background: linear-gradient(135deg, #fff, #f8f5ff);
+  border: 1px solid #eee8ff;
+}
+.gb-coaching-item span {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 15px;
+  background: #f3f0ff;
+}
+.gb-coaching-item p,
+.gb-highlight-item p,
+.gb-chapter-item p {
+  margin: 0;
+  color: var(--gb-text);
+  line-height: 1.5;
+}
+.gb-highlight-item,
+.gb-chapter-item {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+  border-radius: 20px;
+  background: #fff;
+  border: 1px solid #eef2f7;
+}
+.gb-highlight-item strong,
+.gb-chapter-item strong {
+  color: var(--gb-ink);
+  font-size: 17px;
+}
+@media (max-width: 720px) {
+  .gb-insight-panel { padding: 18px; }
+  .gb-insight-tab { padding: 12px 14px; font-size: 14px; }
+  .gb-transcript-line { grid-template-columns: 1fr; gap: 8px; }
+  .gb-deep-dive-grid { grid-template-columns: 1fr; }
+}

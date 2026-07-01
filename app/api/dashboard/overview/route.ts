@@ -21,10 +21,12 @@ type TelemetryRow = {
   id: string;
   device_id: string;
   event_type: string;
-  payload: unknown;
+  payload: Record<string, unknown>;
   occurred_at: string | null;
   created_at: string | null;
 };
+
+type RawTelemetryRow = Omit<TelemetryRow, "payload"> & { payload: unknown };
 
 type ChildRow = {
   id: string;
@@ -55,6 +57,31 @@ type AlertRow = {
   created_at: string | null;
 };
 
+const topicKeywordMap: Record<string, string[]> = {
+  school: ["school", "teacher", "class", "maths", "math", "homework", "lesson", "playtime"],
+  family: ["mum", "mom", "dad", "parent", "grandma", "grandad", "brother", "sister", "family"],
+  friends: ["friend", "friends", "best friend", "played with"],
+  pets: ["dog", "cat", "pet", "hamster", "rabbit", "puppy", "kitten"],
+  football: ["football", "soccer", "arsenal", "goal", "scored", "match", "team"],
+  dinosaurs: ["dinosaur", "t rex", "trex", "spinosaurus", "triceratops"],
+  stories: ["story", "book", "adventure", "dragon", "pirate", "knight"],
+  wellbeing: ["sad", "worried", "scared", "hurt", "lonely", "angry", "upset", "poorly", "sick"]
+};
+
+const emotionKeywordMap: Record<string, string[]> = {
+  happy: ["happy", "good", "great", "excited", "proud", "fun", "laugh", "laughing"],
+  sad: ["sad", "down", "unhappy", "upset", "cry", "crying"],
+  worried: ["worried", "worry", "nervous", "anxious"],
+  angry: ["angry", "cross", "mad", "annoyed", "frustrated"],
+  scared: ["scared", "frightened", "afraid"],
+  tired: ["tired", "sleepy"]
+};
+
+const wellbeingWords = [
+  "hurt", "hurts", "fell", "fall", "bumped", "pain", "poorly", "sick", "sad", "down", "worried",
+  "scared", "lonely", "upset", "crying", "angry", "bully", "bullied", "unsafe"
+];
+
 function isEmotionEvent(type: string) {
   return ["emotion_state", "emotion_selected", "emotion_detected"].includes(type);
 }
@@ -62,7 +89,6 @@ function isEmotionEvent(type: string) {
 function isColoringEvent(type: string) {
   return ["coloring_saved", "coloring_book_saved", "coloring_save"].includes(type);
 }
-
 
 function coercePayload(payload: unknown): Record<string, unknown> {
   if (!payload) return {};
@@ -85,18 +111,117 @@ function coercePayload(payload: unknown): Record<string, unknown> {
   return { raw: String(payload) };
 }
 
+function stringValue(payload: Record<string, unknown>, keys: string[]) {
+  for (const key of keys) {
+    const value = payload[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return null;
+}
+
+function booleanValue(payload: Record<string, unknown>, keys: string[]) {
+  for (const key of keys) {
+    const value = payload[key];
+    if (typeof value === "boolean") return value;
+    if (typeof value === "string") {
+      const normalized = value.trim().toLowerCase();
+      if (["true", "yes", "1"].includes(normalized)) return true;
+      if (["false", "no", "0"].includes(normalized)) return false;
+    }
+  }
+  return false;
+}
+
+function stringList(payload: Record<string, unknown>, keys: string[]) {
+  const results: string[] = [];
+  for (const key of keys) {
+    const value = payload[key];
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        if (typeof item === "string" && item.trim()) results.push(item.trim());
+      }
+    } else if (typeof value === "string" && value.trim()) {
+      results.push(...value.split(/[|,]/).map((item) => item.trim()).filter(Boolean));
+    }
+  }
+  return results;
+}
+
 function extractEmotion(payload: Record<string, unknown>) {
-  return typeof payload?.emotion === "string" ? payload.emotion : null;
+  return stringValue(payload, ["emotion", "mood", "detectedEmotion", "currentEmotion"]);
 }
 
 function extractWord(payload: Record<string, unknown>) {
-  return typeof payload?.word === "string" ? payload.word : null;
+  return stringValue(payload, ["word", "text", "utterance", "childText", "message"]);
 }
 
 function extractActiveChildId(payload: Record<string, unknown>) {
-  if (typeof payload?.activeChildId === "string" && payload.activeChildId.trim()) return payload.activeChildId;
-  if (typeof payload?.childId === "string" && payload.childId.trim()) return payload.childId;
-  return null;
+  return stringValue(payload, ["activeChildId", "childId", "child_id"]);
+}
+
+function extractTranscriptText(event: TelemetryRow) {
+  return stringValue(event.payload, [
+    "transcript", "utterance", "childText", "child_text", "message", "text", "question", "word",
+    "response", "responseText", "bopResponse", "bop_response", "reply"
+  ]);
+}
+
+function extractSpeaker(event: TelemetryRow, childName: string) {
+  const explicit = stringValue(event.payload, ["speaker", "role", "source"]);
+  if (explicit) {
+    const normalized = explicit.toLowerCase();
+    if (normalized.includes("bop") || normalized.includes("assistant") || normalized.includes("character")) return "Bop";
+    if (normalized.includes("child") || normalized.includes("user")) return childName;
+    return explicit;
+  }
+  if (event.event_type.toLowerCase().includes("response") || event.event_type.toLowerCase().includes("bop")) return "Bop";
+  return childName;
+}
+
+function labelFromValue(value: string) {
+  return value
+    .replace(/_/g, " ")
+    .toLowerCase()
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function inferTopics(event: TelemetryRow) {
+  const explicit = [
+    ...stringList(event.payload, ["topics", "topic_list", "conversationTopics"]),
+    ...[stringValue(event.payload, ["topic", "currentTopic", "topicMentioned", "category"])].filter(Boolean) as string[]
+  ];
+  const text = `${extractTranscriptText(event) ?? ""} ${event.event_type}`.toLowerCase();
+  const inferred = Object.entries(topicKeywordMap)
+    .filter(([, keywords]) => keywords.some((keyword) => text.includes(keyword)))
+    .map(([topic]) => topic);
+  return Array.from(new Set([...explicit, ...inferred].map((topic) => topic.toLowerCase())));
+}
+
+function inferEmotion(event: TelemetryRow) {
+  const explicit = extractEmotion(event.payload);
+  if (explicit) return explicit.toLowerCase();
+  const text = `${extractTranscriptText(event) ?? ""} ${event.event_type}`.toLowerCase();
+  const match = Object.entries(emotionKeywordMap).find(([, keywords]) => keywords.some((keyword) => text.includes(keyword)));
+  return match?.[0] ?? null;
+}
+
+function hasWellbeingConcern(event: TelemetryRow) {
+  if (booleanValue(event.payload, ["wellbeing", "wellbeingFlag", "wellbeingConcern", "safetyTriggered", "safety", "sensitive"])) return true;
+  const safetyLevel = stringValue(event.payload, ["safetyLevel", "conversationSafetyLevel"]);
+  if (safetyLevel && safetyLevel.toLowerCase() !== "safe") return true;
+  const text = `${extractTranscriptText(event) ?? ""} ${event.event_type}`.toLowerCase();
+  return wellbeingWords.some((word) => text.includes(word));
+}
+
+function isUnknownQuestion(event: TelemetryRow) {
+  if (booleanValue(event.payload, ["unknownQuestion", "unknown", "noAnswer", "fallbackUsed"])) return true;
+  return event.event_type.toLowerCase().includes("unknown") || event.event_type.toLowerCase().includes("fallback");
+}
+
+function isAiNeeded(event: TelemetryRow) {
+  if (booleanValue(event.payload, ["aiNeeded", "ai_needed", "aiFallbackNeeded", "needsAi"])) return true;
+  const type = event.event_type.toLowerCase();
+  return type.includes("ai_needed") || type.includes("ai_fallback") || type.includes("gigglebrain_ai_needed");
 }
 
 function getTimestamp(value: string | null) {
@@ -113,6 +238,183 @@ function sortNewestFirst<T extends { created_at?: string | null; createdAt?: str
   });
 }
 
+function increment(map: Record<string, number>, key: string | null | undefined) {
+  if (!key) return;
+  map[key] = (map[key] ?? 0) + 1;
+}
+
+function topEntries(map: Record<string, number>, limit = 8) {
+  return Object.entries(map)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, limit)
+    .map(([label, count]) => ({ label, count }));
+}
+
+function buildParentInsights(events: TelemetryRow[], childName: string) {
+  const topicCounts: Record<string, number> = {};
+  const emotionCounts: Record<string, number> = {};
+  const wellbeingSignals: Array<{ id: string; text: string; topic: string | null; emotion: string | null; createdAt: string | null }> = [];
+  const unknownQuestions: Array<{ id: string; question: string; topic: string | null; createdAt: string | null }> = [];
+  const aiNeeded: Array<{ id: string; question: string | null; createdAt: string | null }> = [];
+  const highlights: Array<{ id: string; kind: string; title: string; detail: string; createdAt: string | null }> = [];
+
+  const transcript = events
+    .map((event) => {
+      const text = extractTranscriptText(event);
+      if (!text) return null;
+      return {
+        id: event.id,
+        speaker: extractSpeaker(event, childName),
+        text,
+        eventType: event.event_type,
+        createdAt: event.created_at ?? event.occurred_at
+      };
+    })
+    .filter(Boolean) as Array<{ id: string; speaker: string; text: string; eventType: string; createdAt: string | null }>;
+
+  for (const event of events) {
+    const topics = inferTopics(event);
+    const emotion = inferEmotion(event);
+    for (const topic of topics) increment(topicCounts, topic);
+    increment(emotionCounts, emotion);
+
+    if (hasWellbeingConcern(event)) {
+      const text = extractTranscriptText(event) ?? stringValue(event.payload, ["insight", "summary", "message"]) ?? "Wellbeing signal detected.";
+      const signal = {
+        id: event.id,
+        text,
+        topic: topics[0] ?? null,
+        emotion,
+        createdAt: event.created_at ?? event.occurred_at
+      };
+      wellbeingSignals.push(signal);
+      highlights.push({
+        id: `${event.id}-wellbeing`,
+        kind: "Wellbeing",
+        title: "Wellbeing moment",
+        detail: text,
+        createdAt: signal.createdAt
+      });
+    }
+
+    if (isUnknownQuestion(event)) {
+      const question = extractTranscriptText(event) ?? "Unknown question asked.";
+      unknownQuestions.push({ id: event.id, question, topic: topics[0] ?? null, createdAt: event.created_at ?? event.occurred_at });
+    }
+
+    if (isAiNeeded(event)) {
+      aiNeeded.push({ id: event.id, question: extractTranscriptText(event), createdAt: event.created_at ?? event.occurred_at });
+    }
+  }
+
+  const topTopics = topEntries(topicCounts);
+  const topEmotions = topEntries(emotionCounts);
+  const firstEmotion = [...events].reverse().map(inferEmotion).find(Boolean) ?? null;
+  const latestEmotion = events.map(inferEmotion).find(Boolean) ?? null;
+
+  if (topTopics[0]) {
+    highlights.push({
+      id: "top-topic",
+      kind: "Topic",
+      title: `${labelFromValue(topTopics[0].label)} came up most`,
+      detail: `${childName} mentioned ${labelFromValue(topTopics[0].label).toLowerCase()} ${topTopics[0].count} time${topTopics[0].count === 1 ? "" : "s"}.`,
+      createdAt: events[0]?.created_at ?? events[0]?.occurred_at ?? null
+    });
+  }
+
+  if (firstEmotion && latestEmotion && firstEmotion !== latestEmotion) {
+    highlights.push({
+      id: "emotion-shift",
+      kind: "Emotion",
+      title: "Mood changed during the session",
+      detail: `${childName} moved from ${labelFromValue(firstEmotion).toLowerCase()} to ${labelFromValue(latestEmotion).toLowerCase()}.`,
+      createdAt: events[0]?.created_at ?? events[0]?.occurred_at ?? null
+    });
+  }
+
+  const notes: string[] = [];
+  if (topTopics.length || topEmotions.length) {
+    const topicText = topTopics.slice(0, 3).map((item) => labelFromValue(item.label).toLowerCase()).join(", ");
+    const emotionText = topEmotions.slice(0, 2).map((item) => labelFromValue(item.label).toLowerCase()).join(" and ");
+    notes.push(`${childName} had ${events.length} recent GiggleBox moments${topicText ? `, with conversation signals around ${topicText}` : ""}${emotionText ? ` and signs of feeling ${emotionText}` : ""}.`);
+  } else {
+    notes.push(`${childName} has recent GiggleBox activity. More Ask Me conversations will make the insights richer.`);
+  }
+  if (wellbeingSignals.length) {
+    notes.push(`${childName} shared ${wellbeingSignals.length} wellbeing signal${wellbeingSignals.length === 1 ? "" : "s"}. Treat this as a gentle prompt to check in, not an alarm.`);
+  }
+  if (unknownQuestions.length) {
+    notes.push(`${unknownQuestions.length} question${unknownQuestions.length === 1 ? "" : "s"} may need better offline answers or future GiggleBrain AI support.`);
+  }
+
+  const coaching: string[] = [];
+  if (wellbeingSignals.length) {
+    coaching.push(`Gently ask ${childName} how they are feeling and whether there is anything they would like to tell you. If they mention being hurt, worried, scared, or upset, encourage them to speak to a trusted adult.`);
+  }
+  const schoolTopic = topTopics.find((item) => item.label === "school");
+  if (schoolTopic) {
+    coaching.push(`${childName} mentioned school. A simple follow-up could be: “What was the best part of school today?” or “Was anything tricky today?”`);
+  }
+  const footballTopic = topTopics.find((item) => item.label === "football");
+  if (footballTopic) {
+    coaching.push(`${childName} showed interest in football. This may be a useful way to start a positive conversation.`);
+  }
+  if (unknownQuestions.length) {
+    coaching.push("Review the unknown questions to decide which answers should be added to the offline Conversation Bank before relying on AI.");
+  }
+  if (!coaching.length) {
+    coaching.push("Use the transcript and highlights as a gentle conversation starter. Ask open questions and let the child lead where possible.");
+  }
+
+  const chronological = [...events].reverse();
+  const chapters: Array<{ id: string; title: string; startAt: string | null; endAt: string | null; count: number; summary: string }> = [];
+  let active: { topic: string; startAt: string | null; endAt: string | null; count: number } | null = null;
+  for (const event of chronological) {
+    const topic = inferTopics(event)[0] ?? (inferEmotion(event) ? "feelings" : event.event_type.includes("coloring") ? "creativity" : "activity");
+    const time = event.created_at ?? event.occurred_at;
+    if (!active || active.topic !== topic) {
+      if (active) chapters.push({
+        id: `${active.topic}-${chapters.length}`,
+        title: labelFromValue(active.topic),
+        startAt: active.startAt,
+        endAt: active.endAt,
+        count: active.count,
+        summary: `${active.count} moment${active.count === 1 ? "" : "s"} connected to ${labelFromValue(active.topic).toLowerCase()}.`
+      });
+      active = { topic, startAt: time, endAt: time, count: 1 };
+    } else {
+      active.endAt = time;
+      active.count += 1;
+    }
+  }
+  if (active) chapters.push({
+    id: `${active.topic}-${chapters.length}`,
+    title: labelFromValue(active.topic),
+    startAt: active.startAt,
+    endAt: active.endAt,
+    count: active.count,
+    summary: `${active.count} moment${active.count === 1 ? "" : "s"} connected to ${labelFromValue(active.topic).toLowerCase()}.`
+  });
+
+  return {
+    notes,
+    transcript: transcript.slice(0, 120),
+    deepDive: {
+      topicSummary: topTopics,
+      emotionSummary: topEmotions,
+      wellbeingSignals: wellbeingSignals.slice(0, 20),
+      unknownQuestions: unknownQuestions.slice(0, 20),
+      aiNeededCount: aiNeeded.length,
+      conversationDurationMinutes: events.length > 1
+        ? Math.max(1, Math.round((getTimestamp(events[0].created_at ?? events[0].occurred_at) - getTimestamp(events[events.length - 1].created_at ?? events[events.length - 1].occurred_at)) / 60000))
+        : 0
+    },
+    coaching,
+    highlights: highlights.slice(0, 20),
+    chapters: chapters.slice(0, 20)
+  };
+}
+
 export async function GET(request: NextRequest) {
   try {
     const supabase = getSupabaseAdmin();
@@ -125,7 +427,7 @@ export async function GET(request: NextRequest) {
       linksResult,
       alertsResult
     ] = await Promise.all([
-      supabase.from("telemetry_events").select("*").order("created_at", { ascending: false }).limit(500),
+      supabase.from("telemetry_events").select("*").order("created_at", { ascending: false }).limit(700),
       supabase.from("children").select("id,name,age,created_at").order("created_at", { ascending: false }),
       supabase.from("devices").select("id,serial_number,device_name,created_at").order("created_at", { ascending: false }),
       supabase.from("child_device_links").select("id,child_id,device_id,created_at").order("created_at", { ascending: false }),
@@ -138,11 +440,11 @@ export async function GET(request: NextRequest) {
     if (linksResult.error) throw linksResult.error;
     if (alertsResult.error) throw alertsResult.error;
 
-    const telemetry = (telemetryResult.data ?? []) as TelemetryRow[];
+    const telemetry = (telemetryResult.data ?? []) as RawTelemetryRow[];
     const normalizedTelemetry = telemetry.map((event) => ({
       ...event,
       payload: coercePayload(event.payload)
-    }));
+    })) as TelemetryRow[];
     const children = (childrenResult.data ?? []) as ChildRow[];
     const devices = (devicesResult.data ?? []) as DeviceRow[];
     const links = (linksResult.data ?? []) as LinkRow[];
@@ -282,6 +584,9 @@ export async function GET(request: NextRequest) {
       };
     });
 
+    const childNameForInsights = filteredChildren[0]?.name ?? "This child";
+    const parentInsights = buildParentInsights(filteredTelemetry, childNameForInsights);
+
     return NextResponse.json({
       ok: true,
       filters: { childId },
@@ -299,6 +604,7 @@ export async function GET(request: NextRequest) {
       },
       children: childCards,
       recentActivity,
+      parentInsights,
       deepDive: {
         words,
         emotions,

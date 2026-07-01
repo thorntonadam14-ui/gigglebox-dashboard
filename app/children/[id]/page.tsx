@@ -98,6 +98,17 @@ type Overview = {
       words: string[];
       eventTypes: string[];
     }>;
+    gameEvents?: Array<{
+      id: string;
+      eventType: string;
+      gameName: string;
+      payload: Record<string, unknown>;
+      deviceId: string;
+      childId: string | null;
+      childName: string | null;
+      occurredAt: string | null;
+      createdAt: string | null;
+    }>;
   };
   alerts: Array<{
     id: string;
@@ -372,6 +383,10 @@ export default function ChildDetailPage({ params }: { params: { id: string } }) 
   const filteredRecentActivity = useMemo(() => {
     const items = data?.recentActivity ?? [];
     if (activityFilter === "all") return items;
+    if (activityFilter === "game") {
+      const gameEvents = data?.deepDive.gameEvents ?? [];
+      if (gameEvents.length) return gameEvents;
+    }
     return items.filter((event) => categoryFor(event.eventType).label.toLowerCase().replace(/\s+/g, "-") === activityFilter);
   }, [data, activityFilter]);
   const parentInsights = data?.parentInsights ?? defaultParentInsights(child?.name ?? "This child");
@@ -389,7 +404,9 @@ export default function ChildDetailPage({ params }: { params: { id: string } }) 
     const key = type.toLowerCase();
     return key.includes("story") || key.includes("storybook") ? total + count : total;
   }, 0);
-  const gameActivity = (data?.deepDive.gameActivity?.length ? data.deepDive.gameActivity : buildFallbackGameActivity(data?.recentActivity ?? []));
+  const dedicatedGameEvents = data?.deepDive.gameEvents ?? [];
+  const gameActivity = (data?.deepDive.gameActivity?.length ? data.deepDive.gameActivity : buildFallbackGameActivity(dedicatedGameEvents.length ? dedicatedGameEvents : data?.recentActivity ?? []));
+  const totalGamePlayMoments = gameActivity.reduce((total, game) => total + game.playCount, 0);
   const gameWords = Array.from(new Set(gameActivity.flatMap((game) => game.words))).filter(Boolean).slice(0, 16);
   const fallbackGameWords = gameWords.length ? gameWords : uniqueWords.slice(0, 12);
 
@@ -576,7 +593,7 @@ export default function ChildDetailPage({ params }: { params: { id: string } }) 
                 <div className="gb-activity-metrics">
                   <div><span>Age</span><strong>{child.age ?? "—"}</strong></div>
                   <div><span>Total play moments</span><strong>{child.totalEvents}</strong></div>
-                  <div><span>Games played</span><strong>{gameMoments}</strong><small>Monster Chef and other game events</small></div>
+                  <div><span>Games played</span><strong>{totalGamePlayMoments || gameMoments}</strong><small>{gameActivity[0]?.name ?? "Monster Chef and other game events"}</small></div>
                   <div><span>Stories</span><strong>{storyMoments}</strong><small>Storybook choices and pages</small></div>
                   <div><span>Words practised</span><strong>{filteredWords.length}</strong></div>
                   <div><span>Artwork saves</span><strong>{data.deepDive.savedArtwork.length}</strong></div>
@@ -588,7 +605,7 @@ export default function ChildDetailPage({ params }: { params: { id: string } }) 
                 <div className="gb-card gb-games-played-card">
                   <div className="gb-report-card-head">
                     <div><span className="gb-pill">Games insight</span><h2>Games played</h2></div>
-                    <strong className="gb-soft-count">{gameActivity.reduce((total, game) => total + game.playCount, 0)} moments</strong>
+                    <strong className="gb-soft-count">{totalGamePlayMoments || gameMoments} moments</strong>
                   </div>
                   {gameActivity.length === 0 ? <p className="gb-muted">No game play has been logged yet.</p> : (
                     <div className="gb-game-list">
@@ -604,6 +621,20 @@ export default function ChildDetailPage({ params }: { params: { id: string } }) 
                       ))}
                     </div>
                   )}
+                  {dedicatedGameEvents.length ? (
+                    <div className="gb-game-events-panel">
+                      <h3>Latest game moments</h3>
+                      {dedicatedGameEvents.slice(0, 6).map((event) => (
+                        <div className="gb-game-event-row" key={event.id}>
+                          <span>{gameIcon(event.gameName)}</span>
+                          <div>
+                            <strong>{event.gameName}</strong>
+                            <small>{summarizeEvent(event.eventType, event.payload, child.name)} · {formatDateTime(event.createdAt ?? event.occurredAt)}</small>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
 
                 <div className="gb-card gb-game-words-card">

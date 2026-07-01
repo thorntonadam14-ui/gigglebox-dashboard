@@ -618,6 +618,24 @@ export async function GET(request: NextRequest) {
       };
     });
 
+    const gameEvents = filteredTelemetry
+      .filter((event) => isGameLikeEvent(event))
+      .slice(0, 80)
+      .map((event) => {
+        const resolvedChildId = resolveChildIdForEvent(event);
+        return {
+          id: event.id,
+          eventType: event.event_type,
+          gameName: getGameName(event) ?? labelFromValue(event.event_type),
+          payload: event.payload ?? {},
+          deviceId: event.device_id,
+          childId: resolvedChildId,
+          childName: resolvedChildId ? childById.get(resolvedChildId)?.name ?? null : null,
+          occurredAt: event.occurred_at,
+          createdAt: event.created_at
+        };
+      });
+
     const words = filteredTelemetry
       .filter((event) => event.event_type === "word_spoken")
       .map((event) => {
@@ -686,7 +704,8 @@ export async function GET(request: NextRequest) {
         emotions,
         savedArtwork,
         eventTypes,
-        gameActivity
+        gameActivity,
+        gameEvents
       },
       alerts: filteredAlerts
     });

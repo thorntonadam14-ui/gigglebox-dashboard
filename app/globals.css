@@ -981,3 +981,50 @@ img, svg, video, canvas {
     margin-top: 0.5rem;
   }
 }
+
+.gb-game-events-panel {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(84, 63, 149, 0.12);
+}
+
+.gb-game-events-panel h3 {
+  margin: 0 0 10px;
+  font-size: 0.95rem;
+  color: #25194f;
+}
+
+.gb-game-event-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 0;
+  border-top: 1px solid rgba(84, 63, 149, 0.08);
+}
+
+.gb-game-event-row:first-of-type {
+  border-top: 0;
+}
+
+.gb-game-event-row > span {
+  width: 30px;
+  height: 30px;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #f5f0ff;
+  flex: 0 0 auto;
+}
+
+.gb-game-event-row strong {
+  display: block;
+  color: #26164f;
+  font-size: 0.9rem;
+}
+
+.gb-game-event-row small {
+  display: block;
+  color: #756b94;
+  line-height: 1.35;
+}

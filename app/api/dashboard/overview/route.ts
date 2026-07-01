@@ -226,6 +226,72 @@ function isAiNeeded(event: TelemetryRow) {
   return type.includes("ai_needed") || type.includes("ai_fallback") || type.includes("gigglebrain_ai_needed");
 }
 
+
+function getGameName(event: TelemetryRow) {
+  const explicit = stringValue(event.payload, ["gameName", "game_name", "game", "gameKey", "game_key", "activity", "source"]);
+  if (explicit) return labelFromValue(explicit);
+  const type = event.event_type.toLowerCase();
+  if (type.includes("monsterchef") || type.includes("monster_chef")) return "Monster Chef";
+  if (type.includes("tictactoe") || type.includes("tic_tac_toe")) return "Tic Tac Toe";
+  if (type.includes("storybook") || type.includes("story")) return "Story Spinners";
+  if (type.includes("coloring") || type.includes("colouring")) return "Colouring";
+  if (type.includes("askme") || type.includes("ask_me") || type.includes("conversation")) return "Ask Me";
+  if (type.includes("game")) return labelFromValue(event.event_type);
+  return null;
+}
+
+function isGameLikeEvent(event: TelemetryRow) {
+  return Boolean(getGameName(event));
+}
+
+function buildGameActivity(events: TelemetryRow[]) {
+  const games = new Map<string, { name: string; playCount: number; lastPlayedAt: string | null; words: Set<string>; eventTypes: Set<string> }>();
+
+  for (const event of events) {
+    const gameName = getGameName(event);
+    const word = extractWord(event.payload);
+    const explicitGameForWord = stringValue(event.payload, ["gameName", "game_name", "game", "gameKey", "game_key", "activity", "source"]);
+
+    if (!gameName && !(event.event_type === "word_spoken" && explicitGameForWord)) continue;
+
+    const name = gameName ?? labelFromValue(explicitGameForWord ?? "Ask Me");
+    const current = games.get(name) ?? {
+      name,
+      playCount: 0,
+      lastPlayedAt: null,
+      words: new Set<string>(),
+      eventTypes: new Set<string>()
+    };
+
+    if (isGameLikeEvent(event)) {
+      current.playCount += 1;
+      current.eventTypes.add(event.event_type);
+    }
+
+    if (word && !["ble_test", "hello"].includes(word.toLowerCase())) {
+      current.words.add(word);
+    }
+
+    const eventTime = event.created_at ?? event.occurred_at;
+    if (!current.lastPlayedAt || getTimestamp(eventTime) > getTimestamp(current.lastPlayedAt)) {
+      current.lastPlayedAt = eventTime;
+    }
+
+    games.set(name, current);
+  }
+
+  return Array.from(games.values())
+    .map((game) => ({
+      name: game.name,
+      playCount: game.playCount,
+      lastPlayedAt: game.lastPlayedAt,
+      words: Array.from(game.words).slice(0, 10),
+      eventTypes: Array.from(game.eventTypes).slice(0, 8)
+    }))
+    .sort((a, b) => getTimestamp(b.lastPlayedAt) - getTimestamp(a.lastPlayedAt))
+    .slice(0, 8);
+}
+
 function getTimestamp(value: string | null) {
   if (!value) return 0;
   const ms = Date.parse(value);
@@ -595,6 +661,7 @@ export async function GET(request: NextRequest) {
 
     const childNameForInsights = filteredChildren[0]?.name ?? "This child";
     const parentInsights = buildParentInsights(filteredTelemetry, childNameForInsights);
+    const gameActivity = buildGameActivity(filteredTelemetry);
 
     return NextResponse.json({
       ok: true,
@@ -618,7 +685,8 @@ export async function GET(request: NextRequest) {
         words,
         emotions,
         savedArtwork,
-        eventTypes
+        eventTypes,
+        gameActivity
       },
       alerts: filteredAlerts
     });

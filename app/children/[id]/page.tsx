@@ -91,6 +91,13 @@ type Overview = {
       createdAt: string | null;
     }>;
     eventTypes: Record<string, number>;
+    gameActivity?: Array<{
+      name: string;
+      playCount: number;
+      lastPlayedAt: string | null;
+      words: string[];
+      eventTypes: string[];
+    }>;
   };
   alerts: Array<{
     id: string;
@@ -229,6 +236,55 @@ function categoryFor(eventType: string) {
 }
 
 
+function isGameEventType(eventType: string) {
+  const key = eventType.toLowerCase();
+  return key.includes("game") || key.includes("monsterchef") || key.includes("tictactoe") || key.includes("story") || key.includes("storybook") || key.includes("coloring") || key.includes("colouring");
+}
+
+function gameNameFromEvent(eventType: string, payload: Record<string, unknown>) {
+  const explicitKeys = ["gameName", "game_name", "game", "gameKey", "game_key", "activity", "source"];
+  for (const key of explicitKeys) {
+    const value = payload[key];
+    if (typeof value === "string" && value.trim()) return humanizeLabel(value);
+  }
+  const key = eventType.toLowerCase();
+  if (key.includes("monsterchef") || key.includes("monster_chef")) return "Monster Chef";
+  if (key.includes("tictactoe") || key.includes("tic_tac_toe")) return "Tic Tac Toe";
+  if (key.includes("storybook") || key.includes("story")) return "Story Spinners";
+  if (key.includes("coloring") || key.includes("colouring")) return "Colouring";
+  if (key.includes("askme") || key.includes("ask_me") || key.includes("conversation")) return "Ask Me";
+  if (key.includes("game")) return humanizeLabel(eventType);
+  return null;
+}
+
+function buildFallbackGameActivity(events: Overview["recentActivity"]) {
+  const map = new Map<string, { name: string; playCount: number; lastPlayedAt: string | null; words: string[]; eventTypes: string[] }>();
+  for (const event of events) {
+    const name = gameNameFromEvent(event.eventType, event.payload);
+    if (!name && !isGameEventType(event.eventType)) continue;
+    const gameName = name ?? humanizeLabel(event.eventType);
+    const current = map.get(gameName) ?? { name: gameName, playCount: 0, lastPlayedAt: null, words: [], eventTypes: [] };
+    current.playCount += 1;
+    if (!current.eventTypes.includes(event.eventType)) current.eventTypes.push(event.eventType);
+    const word = typeof event.payload.word === "string" ? event.payload.word : typeof event.payload.text === "string" ? event.payload.text : null;
+    if (word && !current.words.includes(word)) current.words.push(word);
+    const time = event.createdAt ?? event.occurredAt;
+    if (!current.lastPlayedAt || (time && new Date(time).getTime() > new Date(current.lastPlayedAt).getTime())) current.lastPlayedAt = time;
+    map.set(gameName, current);
+  }
+  return Array.from(map.values()).slice(0, 8);
+}
+
+function gameIcon(name: string) {
+  const key = name.toLowerCase();
+  if (key.includes("monster") || key.includes("chef")) return "🍳";
+  if (key.includes("story")) return "📚";
+  if (key.includes("colour") || key.includes("color")) return "🎨";
+  if (key.includes("ask")) return "💬";
+  if (key.includes("tic") || key.includes("toe")) return "⭕";
+  return "🎮";
+}
+
 function getTopLabel(items: Array<{ label: string; count: number }>, fallback: string) {
   return items[0]?.label ? humanizeLabel(items[0].label) : fallback;
 }
@@ -333,6 +389,9 @@ export default function ChildDetailPage({ params }: { params: { id: string } }) 
     const key = type.toLowerCase();
     return key.includes("story") || key.includes("storybook") ? total + count : total;
   }, 0);
+  const gameActivity = (data?.deepDive.gameActivity?.length ? data.deepDive.gameActivity : buildFallbackGameActivity(data?.recentActivity ?? []));
+  const gameWords = Array.from(new Set(gameActivity.flatMap((game) => game.words))).filter(Boolean).slice(0, 16);
+  const fallbackGameWords = gameWords.length ? gameWords : uniqueWords.slice(0, 12);
 
   return (
     <div className="gb-page">
@@ -522,6 +581,37 @@ export default function ChildDetailPage({ params }: { params: { id: string } }) 
                   <div><span>Words practised</span><strong>{filteredWords.length}</strong></div>
                   <div><span>Artwork saves</span><strong>{data.deepDive.savedArtwork.length}</strong></div>
                   <div><span>Device</span><strong>{deviceOnline ? "Online" : "Offline"}</strong><small>{child.linkedDevice?.device_name ?? "Not linked"}</small></div>
+                </div>
+              </section>
+
+              <section className="gb-report-layout gb-games-words-layout">
+                <div className="gb-card gb-games-played-card">
+                  <div className="gb-report-card-head">
+                    <div><span className="gb-pill">Games insight</span><h2>Games played</h2></div>
+                    <strong className="gb-soft-count">{gameActivity.reduce((total, game) => total + game.playCount, 0)} moments</strong>
+                  </div>
+                  {gameActivity.length === 0 ? <p className="gb-muted">No game play has been logged yet.</p> : (
+                    <div className="gb-game-list">
+                      {gameActivity.map((game) => (
+                        <div className="gb-game-item" key={game.name}>
+                          <div className="gb-game-icon">{gameIcon(game.name)}</div>
+                          <div className="gb-game-main">
+                            <strong>{game.name}</strong>
+                            <small>{game.playCount} play moment{game.playCount === 1 ? "" : "s"}{game.lastPlayedAt ? ` · last ${formatDateTime(game.lastPlayedAt)}` : ""}</small>
+                            {game.eventTypes.length ? <span>{game.eventTypes.map(humanizeLabel).slice(0, 3).join(" · ")}</span> : null}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="gb-card gb-game-words-card">
+                  <div className="gb-report-card-head">
+                    <div><span className="gb-pill">Words used in games</span><h2>Game language</h2></div>
+                  </div>
+                  {fallbackGameWords.length === 0 ? <p className="gb-muted">No game words have been captured yet.</p> : <div className="gb-word-cloud gb-game-word-cloud">{fallbackGameWords.map((word) => <span key={word}>{word}</span>)}</div>}
+                  <p className="gb-muted gb-small-note">Shows words linked to game play where available. If older events do not include a game tag, recent spoken words are shown here as a fallback.</p>
                 </div>
               </section>
 

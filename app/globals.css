@@ -906,3 +906,78 @@ img, svg, video, canvas {
     grid-template-columns: 1fr;
   }
 }
+
+/* Parent Insights cleanup: restore clear game reporting */
+.gb-games-words-layout {
+  align-items: stretch;
+}
+
+.gb-games-played-card,
+.gb-game-words-card {
+  border: 1px solid rgba(121, 76, 255, 0.11);
+}
+
+.gb-soft-count {
+  background: rgba(121, 76, 255, 0.08);
+  border-radius: 999px;
+  color: #4b2fcf;
+  font-size: 0.8rem;
+  padding: 0.45rem 0.7rem;
+  white-space: nowrap;
+}
+
+.gb-game-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.gb-game-item {
+  align-items: center;
+  background: linear-gradient(135deg, rgba(255,255,255,0.94), rgba(247,244,255,0.9));
+  border: 1px solid rgba(121, 76, 255, 0.1);
+  border-radius: 18px;
+  display: grid;
+  gap: 0.8rem;
+  grid-template-columns: auto 1fr;
+  padding: 0.8rem;
+}
+
+.gb-game-icon {
+  align-items: center;
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 10px 24px rgba(45, 35, 95, 0.08);
+  display: flex;
+  font-size: 1.35rem;
+  height: 44px;
+  justify-content: center;
+  width: 44px;
+}
+
+.gb-game-main {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.gb-game-main strong {
+  color: #21164f;
+  font-size: 0.98rem;
+}
+
+.gb-game-main small,
+.gb-game-main span,
+.gb-small-note {
+  color: #7b7399;
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.gb-game-word-cloud {
+  margin-bottom: 0.75rem;
+}
+
+@media (max-width: 760px) {
+  .gb-soft-count {
+    margin-top: 0.5rem;
+  }
+}

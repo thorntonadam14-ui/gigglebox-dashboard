@@ -3,6 +3,19 @@
 import { useEffect, useMemo, useState } from "react";
 
 type ParentInsights = {
+  intelligence?: {
+    todaysStory: string;
+    parentHeadline: string;
+    childProfile: string;
+    curiosityLevel: { label: string; detail: string; score: number };
+    communicationLevel: { label: string; detail: string; score: number };
+    confidenceLevel: { label: string; detail: string; score: number };
+    learningStyle: string;
+    parentIdeas: string[];
+    weekSignals: string[];
+    nextBestQuestions: string[];
+    demoSummary: string;
+  };
   notes: string[];
   transcript: Array<{
     id: string;
@@ -329,8 +342,27 @@ function aiBrainStatus(insights: ParentInsights) {
   };
 }
 
+
+function scoreDots(score: number) {
+  const safeScore = Math.max(1, Math.min(5, Math.round(score || 1)));
+  return "●".repeat(safeScore) + "○".repeat(5 - safeScore);
+}
+
 function defaultParentInsights(childName: string): ParentInsights {
   return {
+    intelligence: {
+      todaysStory: `${childName} has activity in the report. Parent Intelligence will become richer as Ask Me sends more conversation signals.`,
+      parentHeadline: `${childName}'s GiggleBox story is building up.`,
+      childProfile: "More conversation data is needed before GiggleBrain can describe patterns confidently.",
+      curiosityLevel: { label: "Building up", detail: "Curiosity signals will appear as more questions are asked.", score: 1 },
+      communicationLevel: { label: "Building up", detail: "Communication signals will appear as more transcript lines arrive.", score: 1 },
+      confidenceLevel: { label: "Building up", detail: "Confidence signals will appear over time.", score: 1 },
+      learningStyle: "Play-led explorer",
+      parentIdeas: ["Ask one open question about today and let the child lead the conversation."],
+      weekSignals: ["Interests are still building up."],
+      nextBestQuestions: ["What was your favourite thing you did with Bop today?", "What should Bop remember for next time?"],
+      demoSummary: "Parent Intelligence turns GiggleBrain signals into a clear story for parents."
+    },
     notes: [`${childName} has activity in the report. Parent Insights will become richer as Ask Me sends more conversation signals.`],
     transcript: [],
     deepDive: {
@@ -390,7 +422,8 @@ export default function ChildDetailPage({ params }: { params: { id: string } }) 
     return items.filter((event) => categoryFor(event.eventType).label.toLowerCase().replace(/\s+/g, "-") === activityFilter);
   }, [data, activityFilter]);
   const parentInsights = data?.parentInsights ?? defaultParentInsights(child?.name ?? "This child");
-  const todayStory = buildTodayStory(child?.name ?? "This child", parentInsights);
+  const intelligence = parentInsights.intelligence ?? defaultParentInsights(child?.name ?? "This child").intelligence!;
+  const todayStory = intelligence.todaysStory || buildTodayStory(child?.name ?? "This child", parentInsights);
   const aiStatus = aiBrainStatus(parentInsights);
   const mainTopic = getTopLabel(parentInsights.deepDive.topicSummary, "Building up");
   const mainEmotion = getTopLabel(parentInsights.deepDive.emotionSummary, latestMood);
@@ -466,6 +499,54 @@ export default function ChildDetailPage({ params }: { params: { id: string } }) 
                 <div className="gb-report-stat"><span>Mood signal</span><strong>{moodEmoji} {mainEmotion}</strong></div>
                 <div className="gb-report-stat"><span>Wellbeing</span><strong>{parentInsights.deepDive.wellbeingSignals.length}</strong><small>Gentle check-in signals</small></div>
                 <div className="gb-report-stat"><span>AI opportunities</span><strong>{aiOpportunityCount}</strong><small>Unknown questions / future fallback</small></div>
+              </section>
+
+              <section className="gb-parent-intelligence-section">
+                <div className="gb-parent-intel-lead gb-card">
+                  <span className="gb-pill">GiggleBrain 8.0</span>
+                  <h2>Parent Intelligence</h2>
+                  <p>{intelligence.parentHeadline}</p>
+                  <div className="gb-parent-intel-story">{intelligence.childProfile}</div>
+                </div>
+
+                <div className="gb-parent-intel-grid">
+                  <div className="gb-parent-intel-card gb-card">
+                    <span className="gb-intel-icon">🔎</span>
+                    <h3>Curiosity</h3>
+                    <strong>{intelligence.curiosityLevel.label}</strong>
+                    <div className="gb-score-dots" aria-label={`Curiosity score ${intelligence.curiosityLevel.score} out of 5`}>{scoreDots(intelligence.curiosityLevel.score)}</div>
+                    <p>{intelligence.curiosityLevel.detail}</p>
+                  </div>
+                  <div className="gb-parent-intel-card gb-card">
+                    <span className="gb-intel-icon">💬</span>
+                    <h3>Communication</h3>
+                    <strong>{intelligence.communicationLevel.label}</strong>
+                    <div className="gb-score-dots" aria-label={`Communication score ${intelligence.communicationLevel.score} out of 5`}>{scoreDots(intelligence.communicationLevel.score)}</div>
+                    <p>{intelligence.communicationLevel.detail}</p>
+                  </div>
+                  <div className="gb-parent-intel-card gb-card">
+                    <span className="gb-intel-icon">🌱</span>
+                    <h3>Confidence</h3>
+                    <strong>{intelligence.confidenceLevel.label}</strong>
+                    <div className="gb-score-dots" aria-label={`Confidence score ${intelligence.confidenceLevel.score} out of 5`}>{scoreDots(intelligence.confidenceLevel.score)}</div>
+                    <p>{intelligence.confidenceLevel.detail}</p>
+                  </div>
+                </div>
+
+                <div className="gb-parent-intel-actions">
+                  <div className="gb-card gb-parent-intel-action-card">
+                    <h3>Parent ideas</h3>
+                    {intelligence.parentIdeas.map((idea, index) => <p key={index}><span>💡</span>{idea}</p>)}
+                  </div>
+                  <div className="gb-card gb-parent-intel-action-card">
+                    <h3>What to ask next</h3>
+                    {intelligence.nextBestQuestions.map((question, index) => <p key={index}><span>❔</span>{question}</p>)}
+                  </div>
+                  <div className="gb-card gb-parent-intel-action-card">
+                    <h3>Signals</h3>
+                    {intelligence.weekSignals.map((signal, index) => <p key={index}><span>✨</span>{signal}</p>)}
+                  </div>
+                </div>
               </section>
 
               <section className="gb-card gb-parent-insights-card">

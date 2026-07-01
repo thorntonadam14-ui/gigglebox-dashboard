@@ -1028,3 +1028,129 @@ img, svg, video, canvas {
   color: #756b94;
   line-height: 1.35;
 }
+
+/* GiggleBrain 8.0 Parent Intelligence */
+.gb-parent-intelligence-section {
+  display: grid;
+  gap: 18px;
+}
+
+.gb-parent-intel-lead {
+  background:
+    radial-gradient(circle at 92% 12%, rgba(255, 214, 102, .28), transparent 28%),
+    linear-gradient(135deg, rgba(255,255,255,.98), rgba(247,243,255,.96));
+  border: 1px solid rgba(121, 76, 255, .12);
+}
+
+.gb-parent-intel-lead h2 {
+  color: #24164f;
+  font-size: clamp(1.7rem, 2.8vw, 2.35rem);
+  line-height: 1.05;
+  margin: 10px 0 8px;
+}
+
+.gb-parent-intel-lead p {
+  color: #51456f;
+  font-size: 1.04rem;
+  line-height: 1.55;
+  margin: 0;
+  max-width: 880px;
+}
+
+.gb-parent-intel-story {
+  background: rgba(255,255,255,.72);
+  border: 1px solid rgba(84, 63, 149, .1);
+  border-radius: 18px;
+  color: #594f78;
+  line-height: 1.45;
+  margin-top: 14px;
+  padding: 14px 16px;
+}
+
+.gb-parent-intel-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.gb-parent-intel-card {
+  background: linear-gradient(180deg, #fff, #fbf9ff);
+  border: 1px solid rgba(121, 76, 255, .1);
+  min-height: 210px;
+}
+
+.gb-intel-icon {
+  align-items: center;
+  background: #f4efff;
+  border-radius: 16px;
+  display: inline-flex;
+  font-size: 1.35rem;
+  height: 46px;
+  justify-content: center;
+  width: 46px;
+}
+
+.gb-parent-intel-card h3 {
+  color: #24164f;
+  font-size: 1rem;
+  margin: 12px 0 6px;
+}
+
+.gb-parent-intel-card strong {
+  color: #4b2fcf;
+  display: block;
+  font-size: 1.45rem;
+  line-height: 1.1;
+}
+
+.gb-score-dots {
+  color: #7b4cff;
+  font-size: 1.05rem;
+  letter-spacing: 2px;
+  margin: 10px 0;
+}
+
+.gb-parent-intel-card p {
+  color: #6d6387;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.gb-parent-intel-actions {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.gb-parent-intel-action-card {
+  border: 1px solid rgba(121, 76, 255, .1);
+}
+
+.gb-parent-intel-action-card h3 {
+  color: #24164f;
+  margin: 0 0 12px;
+}
+
+.gb-parent-intel-action-card p {
+  align-items: flex-start;
+  color: #5f557c;
+  display: flex;
+  gap: 9px;
+  line-height: 1.42;
+  margin: 0 0 10px;
+}
+
+.gb-parent-intel-action-card p:last-child {
+  margin-bottom: 0;
+}
+
+.gb-parent-intel-action-card p span {
+  flex: 0 0 auto;
+}
+
+@media (max-width: 900px) {
+  .gb-parent-intel-grid,
+  .gb-parent-intel-actions {
+    grid-template-columns: 1fr;
+  }
+}

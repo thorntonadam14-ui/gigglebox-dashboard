@@ -318,6 +318,87 @@ function topEntries(map: Record<string, number>, limit = 8) {
     .map(([label, count]) => ({ label, count }));
 }
 
+
+function scoreLabel(score: number) {
+  if (score >= 4) return "Very strong";
+  if (score >= 3) return "Growing";
+  if (score >= 2) return "Emerging";
+  return "Building up";
+}
+
+function buildParentIntelligence(params: {
+  childName: string;
+  events: TelemetryRow[];
+  topTopics: Array<{ label: string; count: number }>;
+  topEmotions: Array<{ label: string; count: number }>;
+  wellbeingSignals: Array<{ id: string; text: string; topic: string | null; emotion: string | null; createdAt: string | null }>;
+  unknownQuestions: Array<{ id: string; question: string; topic: string | null; createdAt: string | null }>;
+  transcript: Array<{ id: string; speaker: string; text: string; eventType: string; createdAt: string | null }>;
+}) {
+  const { childName, events, topTopics, topEmotions, wellbeingSignals, unknownQuestions, transcript } = params;
+  const topicNames = topTopics.slice(0, 4).map((item) => labelFromValue(item.label).toLowerCase());
+  const topicText = topicNames.length ? topicNames.join(", ") : "play, conversation and discovery";
+  const strongestEmotion = topEmotions[0]?.label ? labelFromValue(topEmotions[0].label).toLowerCase() : "settled";
+  const questionText = transcript.map((line) => line.text).join(" ").toLowerCase();
+  const whyHowCount = (questionText.match(/(why|how|what|where|when|who)/g) ?? []).length;
+  const childLines = transcript.filter((line) => line.speaker !== "Bop").length;
+  const bopLines = transcript.filter((line) => line.speaker === "Bop").length;
+  const curiosityScore = Math.min(5, Math.max(1, Math.round((whyHowCount + unknownQuestions.length + topTopics.length) / 2)));
+  const communicationScore = Math.min(5, Math.max(1, Math.round((childLines + topTopics.length) / 4)));
+  const confidenceScore = Math.min(5, Math.max(1, wellbeingSignals.length ? 2 : Math.round((childLines + topEmotions.length + events.length / 10) / 3)));
+
+  const todaysStory = `${childName} spent time with GiggleBox exploring ${topicText}. The strongest mood signal was ${strongestEmotion}. ${unknownQuestions.length ? `${childName} asked ${unknownQuestions.length} question${unknownQuestions.length === 1 ? "" : "s"} that could be helped by GiggleBrain AI.` : "Bop was able to support the latest activity with the current offline system."}${wellbeingSignals.length ? " There was a gentle wellbeing signal worth checking in on." : ""}`;
+
+  const parentIdeas: string[] = [];
+  if (topTopics.some((item) => item.label === "dinosaurs")) parentIdeas.push("Ask which dinosaur was most interesting today, then look up a picture or book together.");
+  if (topTopics.some((item) => item.label === "football")) parentIdeas.push("Use football as a positive conversation starter: “What was your favourite moment playing today?”");
+  if (topTopics.some((item) => item.label === "school")) parentIdeas.push("Try a gentle school check-in: “What was the best part of school today?”");
+  if (topTopics.some((item) => item.label === "stories")) parentIdeas.push("Continue the story thread at bedtime by asking what should happen next.");
+  if (unknownQuestions.length) parentIdeas.push("Pick one unknown question and explore it together. These are useful moments for the GiggleBrain AI knowledge layer.");
+  if (wellbeingSignals.length) parentIdeas.push("Offer a calm check-in and remind them they can always talk to a trusted grown-up.");
+  if (!parentIdeas.length) parentIdeas.push("Ask one open question about today and let the child lead the conversation.");
+
+  const weekSignals = [
+    topicNames.length ? `Most visible interest: ${labelFromValue(topTopics[0].label)}.` : "Interests are still building up.",
+    `${childName} showed ${scoreLabel(curiosityScore).toLowerCase()} curiosity in this report.`,
+    `${childName} used ${childLines || events.length} child-led moment${(childLines || events.length) === 1 ? "" : "s"}.`
+  ];
+
+  if (wellbeingSignals.length) weekSignals.push("A wellbeing mention appeared; treat it as a gentle check-in prompt, not an alarm.");
+
+  const nextBestQuestions = [
+    topTopics[0] ? `What made ${labelFromValue(topTopics[0].label).toLowerCase()} interesting today?` : "What was your favourite thing you did with Bop today?",
+    unknownQuestions[0]?.question ? `Do you still want to know about: “${unknownQuestions[0].question}”?` : "Is there anything you want Bop to learn about next?",
+    "What should Bop remember for next time?"
+  ];
+
+  return {
+    todaysStory,
+    parentHeadline: `${childName} was mainly exploring ${topicText}.`,
+    childProfile: `Current session profile: ${scoreLabel(curiosityScore).toLowerCase()} curiosity, ${scoreLabel(communicationScore).toLowerCase()} communication and ${scoreLabel(confidenceScore).toLowerCase()} confidence signals.`,
+    curiosityLevel: {
+      label: scoreLabel(curiosityScore),
+      detail: whyHowCount || unknownQuestions.length ? `${childName} asked curiosity-style questions and showed interest in learning more.` : "Curiosity signals will become clearer as more questions are asked.",
+      score: curiosityScore
+    },
+    communicationLevel: {
+      label: scoreLabel(communicationScore),
+      detail: childLines ? `${childName} contributed ${childLines} transcript line${childLines === 1 ? "" : "s"}.` : "More Ask Me transcript lines will help build a clearer picture.",
+      score: communicationScore
+    },
+    confidenceLevel: {
+      label: scoreLabel(confidenceScore),
+      detail: wellbeingSignals.length ? "There was a wellbeing signal, so the focus is gentle reassurance rather than confidence scoring." : "Confidence is estimated from engagement, emotion signals and topic movement.",
+      score: confidenceScore
+    },
+    learningStyle: unknownQuestions.length ? "Curious explorer: asks questions that can grow into learning moments." : "Play-led explorer: uses games, stories and conversation to build confidence.",
+    parentIdeas: parentIdeas.slice(0, 5),
+    weekSignals: weekSignals.slice(0, 5),
+    nextBestQuestions: nextBestQuestions.slice(0, 4),
+    demoSummary: `Parent Intelligence turns GiggleBrain signals into a parent-friendly story: topics, mood, curiosity, unknown questions and gentle next steps.`
+  };
+}
+
 function buildParentInsights(events: TelemetryRow[], childName: string) {
   const topicCounts: Record<string, number> = {};
   const emotionCounts: Record<string, number> = {};
@@ -471,7 +552,18 @@ function buildParentInsights(events: TelemetryRow[], childName: string) {
     summary: `${active.count} moment${active.count === 1 ? "" : "s"} connected to ${labelFromValue(active.topic).toLowerCase()}.`
   });
 
+  const parentIntelligence = buildParentIntelligence({
+    childName,
+    events,
+    topTopics,
+    topEmotions,
+    wellbeingSignals,
+    unknownQuestions,
+    transcript
+  });
+
   return {
+    intelligence: parentIntelligence,
     notes,
     transcript: transcript.slice(0, 120),
     deepDive: {

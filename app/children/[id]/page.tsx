@@ -323,6 +323,16 @@ export default function ChildDetailPage({ params }: { params: { id: string } }) 
   const aiStatus = aiBrainStatus(parentInsights);
   const mainTopic = getTopLabel(parentInsights.deepDive.topicSummary, "Building up");
   const mainEmotion = getTopLabel(parentInsights.deepDive.emotionSummary, latestMood);
+  const aiOpportunityCount = parentInsights.deepDive.aiNeededCount + parentInsights.deepDive.unknownQuestions.length;
+  const eventTypes = data?.deepDive.eventTypes ?? {};
+  const gameMoments = Object.entries(eventTypes).reduce((total, [type, count]) => {
+    const key = type.toLowerCase();
+    return key.includes("game") || key.includes("monsterchef") || key.includes("tictactoe") ? total + count : total;
+  }, 0);
+  const storyMoments = Object.entries(eventTypes).reduce((total, [type, count]) => {
+    const key = type.toLowerCase();
+    return key.includes("story") || key.includes("storybook") ? total + count : total;
+  }, 0);
 
   return (
     <div className="gb-page">
@@ -350,51 +360,36 @@ export default function ChildDetailPage({ params }: { params: { id: string } }) 
 
           {data && child ? (
             <>
-              <section className="gb-report-hero gb-parent-insights-hero">
-                <div>
+              <section className="gb-report-hero gb-parent-insights-hero gb-parent-hero-clean">
+                <div className="gb-parent-hero-story">
                   <div className="gb-eyebrow">Parent Insights</div>
                   <h1>{child.name}&apos;s Conversation Report</h1>
+                  <span className="gb-pill">Today&apos;s Story</span>
                   <p>{todayStory}</p>
                   <div className="gb-actions">
                     <a className="gb-button-secondary" href="/children">Back to Children</a>
                     <button className="gb-button" onClick={load}>Refresh Insights</button>
                   </div>
                 </div>
-                <div className="gb-mood-card">
-                  <span>Current mood</span>
-                  <strong>{latestMood}</strong>
-                  <div className="gb-mood-emoji">{moodEmoji}</div>
-                  <small>Checked {formatRelative(lastSeen)} · {formatDateTime(lastSeen)}</small>
-                </div>
-              </section>
-
-              <section className="gb-report-stats">
-                <div className="gb-report-stat"><span>Age</span><strong>{child.age ?? "—"}</strong></div>
-                <div className="gb-report-stat"><span>Play moments</span><strong>{child.totalEvents}</strong></div>
-                <div className="gb-report-stat"><span>Main topic</span><strong>{mainTopic}</strong></div>
-                <div className="gb-report-stat"><span>Mood signal</span><strong>{mainEmotion}</strong></div>
-                <div className="gb-report-stat"><span>Wellbeing signals</span><strong>{parentInsights.deepDive.wellbeingSignals.length}</strong><small>Gentle check-in prompts</small></div>
-                <div className="gb-report-stat"><span>AI opportunities</span><strong>{parentInsights.deepDive.aiNeededCount + parentInsights.deepDive.unknownQuestions.length}</strong><small>Unknown questions / future fallback</small></div>
-                <div className="gb-report-stat"><span>Device</span><strong>{deviceOnline ? "Online" : "Offline"}</strong><small>{child.linkedDevice?.device_name ?? "Not linked"}</small></div>
-              </section>
-
-              <section className="gb-parent-overview-grid">
-                <div className="gb-card gb-parent-story-card">
-                  <span className="gb-pill">Today's Story</span>
-                  <h2>{child.name}'s GiggleBox journey</h2>
-                  <p>{todayStory}</p>
-                  <div className="gb-mini-metrics">
-                    <span><b>{parentInsights.deepDive.conversationDurationMinutes}</b> min</span>
-                    <span><b>{parentInsights.transcript.length}</b> transcript lines</span>
-                    <span><b>{parentInsights.deepDive.topicSummary.length}</b> topics</span>
+                <div className="gb-parent-hero-side">
+                  <div className="gb-mood-card gb-mood-card-compact">
+                    <span>Current mood</span>
+                    <strong>{latestMood}</strong>
+                    <div className="gb-mood-emoji">{moodEmoji}</div>
+                    <small>Checked {formatRelative(lastSeen)} · {formatDateTime(lastSeen)}</small>
+                  </div>
+                  <div className={`gb-ai-mini gb-ai-mini-${aiStatus.tone}`}>
+                    <strong>GiggleBrain AI Preview</strong>
+                    <p>{aiStatus.detail}</p>
                   </div>
                 </div>
-                <div className={`gb-card gb-ai-brain-card gb-ai-brain-${aiStatus.tone}`}>
-                  <span className="gb-pill">GiggleBrain AI Preview</span>
-                  <h2>{aiStatus.title}</h2>
-                  <p>{aiStatus.detail}</p>
-                  <small>AI should only support safe unknown questions. Wellbeing and safety stay in GiggleBox first.</small>
-                </div>
+              </section>
+
+              <section className="gb-report-stats gb-report-stats-focus">
+                <div className="gb-report-stat"><span>Main topic</span><strong>{mainTopic}</strong></div>
+                <div className="gb-report-stat"><span>Mood signal</span><strong>{moodEmoji} {mainEmotion}</strong></div>
+                <div className="gb-report-stat"><span>Wellbeing</span><strong>{parentInsights.deepDive.wellbeingSignals.length}</strong><small>Gentle check-in signals</small></div>
+                <div className="gb-report-stat"><span>AI opportunities</span><strong>{aiOpportunityCount}</strong><small>Unknown questions / future fallback</small></div>
               </section>
 
               <section className="gb-card gb-parent-insights-card">
@@ -508,6 +503,25 @@ export default function ChildDetailPage({ params }: { params: { id: string } }) 
                       </div>
                     )
                   ) : null}
+                </div>
+              </section>
+
+              <section className="gb-card gb-activity-overview-card">
+                <div className="gb-section-heading">
+                  <div>
+                    <span className="gb-pill">GiggleBox Activity</span>
+                    <h2>Play, games and creative work</h2>
+                    <p>Parent Insights sits alongside the existing GiggleBox activity report, so games, artwork, words and device status stay visible.</p>
+                  </div>
+                </div>
+                <div className="gb-activity-metrics">
+                  <div><span>Age</span><strong>{child.age ?? "—"}</strong></div>
+                  <div><span>Total play moments</span><strong>{child.totalEvents}</strong></div>
+                  <div><span>Games played</span><strong>{gameMoments}</strong><small>Monster Chef and other game events</small></div>
+                  <div><span>Stories</span><strong>{storyMoments}</strong><small>Storybook choices and pages</small></div>
+                  <div><span>Words practised</span><strong>{filteredWords.length}</strong></div>
+                  <div><span>Artwork saves</span><strong>{data.deepDive.savedArtwork.length}</strong></div>
+                  <div><span>Device</span><strong>{deviceOnline ? "Online" : "Offline"}</strong><small>{child.linkedDevice?.device_name ?? "Not linked"}</small></div>
                 </div>
               </section>
 

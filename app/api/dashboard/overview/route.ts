@@ -65,7 +65,9 @@ const topicKeywordMap: Record<string, string[]> = {
   football: ["football", "soccer", "arsenal", "goal", "scored", "match", "team"],
   dinosaurs: ["dinosaur", "t rex", "trex", "spinosaurus", "triceratops"],
   stories: ["story", "book", "adventure", "dragon", "pirate", "knight"],
-  wellbeing: ["sad", "worried", "scared", "hurt", "lonely", "angry", "upset", "poorly", "sick"]
+  wellbeing: ["sad", "worried", "scared", "hurt", "lonely", "angry", "upset", "poorly", "sick"],
+  games: ["game", "play a game", "guessing", "quiz", "round", "turn"],
+  jokes: ["joke", "funny", "laugh", "riddle"]
 };
 
 const emotionKeywordMap: Record<string, string[]> = {
@@ -214,7 +216,7 @@ function hasWellbeingConcern(event: TelemetryRow) {
 }
 
 function isUnknownQuestion(event: TelemetryRow) {
-  if (booleanValue(event.payload, ["unknownQuestion", "unknown", "noAnswer", "fallbackUsed"])) return true;
+  if (booleanValue(event.payload, ["unknownQuestion", "unknown", "noAnswer", "fallbackUsed", "aiNeeded", "ai_needed", "needsAi"])) return true;
   return event.event_type.toLowerCase().includes("unknown") || event.event_type.toLowerCase().includes("fallback");
 }
 
@@ -344,7 +346,14 @@ function buildParentInsights(events: TelemetryRow[], childName: string) {
     notes.push(`${childName} shared ${wellbeingSignals.length} wellbeing signal${wellbeingSignals.length === 1 ? "" : "s"}. Treat this as a gentle prompt to check in, not an alarm.`);
   }
   if (unknownQuestions.length) {
-    notes.push(`${unknownQuestions.length} question${unknownQuestions.length === 1 ? "" : "s"} may need better offline answers or future GiggleBrain AI support.`);
+    notes.push(`${unknownQuestions.length} question${unknownQuestions.length === 1 ? "" : "s"} may need better offline answers or future GiggleBrain AI support. These are useful partner-demo moments because they show where AI can extend Bop without replacing the offline safety layer.`);
+    highlights.push({
+      id: "gigglebrain-ai-opportunity",
+      kind: "AI Brain",
+      title: "GiggleBrain AI opportunity",
+      detail: `${unknownQuestions.length} safe unknown question${unknownQuestions.length === 1 ? "" : "s"} could be routed to AI fallback later.`,
+      createdAt: unknownQuestions[0]?.createdAt ?? events[0]?.created_at ?? events[0]?.occurred_at ?? null
+    });
   }
 
   const coaching: string[] = [];
@@ -360,7 +369,7 @@ function buildParentInsights(events: TelemetryRow[], childName: string) {
     coaching.push(`${childName} showed interest in football. This may be a useful way to start a positive conversation.`);
   }
   if (unknownQuestions.length) {
-    coaching.push("Review the unknown questions to decide which answers should be added to the offline Conversation Bank before relying on AI.");
+    coaching.push("Review the unknown questions to decide which answers should be added to the offline Conversation Bank and which safe questions are good candidates for GiggleBrain AI fallback.");
   }
   if (!coaching.length) {
     coaching.push("Use the transcript and highlights as a gentle conversation starter. Ask open questions and let the child lead where possible.");

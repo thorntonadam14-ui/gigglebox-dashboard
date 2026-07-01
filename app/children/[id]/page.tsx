@@ -116,7 +116,7 @@ const emotionEmoji: Record<string, string> = {
 };
 
 const insightTabs = [
-  { id: "notes", label: "Notes" },
+  { id: "notes", label: "Summary" },
   { id: "transcript", label: "Transcript" },
   { id: "deep-dive", label: "Deep Dive" },
   { id: "coaching", label: "Coaching" },
@@ -228,6 +228,40 @@ function categoryFor(eventType: string) {
   return { label: "Activity", icon: "✨", className: "gb-report-soft" };
 }
 
+
+function getTopLabel(items: Array<{ label: string; count: number }>, fallback: string) {
+  return items[0]?.label ? humanizeLabel(items[0].label) : fallback;
+}
+
+function buildTodayStory(childName: string, insights: ParentInsights) {
+  const topTopics = insights.deepDive.topicSummary.slice(0, 3).map((item) => humanizeLabel(item.label).toLowerCase());
+  const topEmotion = insights.deepDive.emotionSummary[0]?.label ? humanizeLabel(insights.deepDive.emotionSummary[0].label).toLowerCase() : null;
+  const minutes = insights.deepDive.conversationDurationMinutes;
+  const topicText = topTopics.length ? topTopics.join(", ") : "conversation, play and learning";
+  const timeText = minutes > 0 ? `${minutes} minute${minutes === 1 ? "" : "s"}` : "today";
+  const moodText = topEmotion ? ` The strongest mood signal was ${topEmotion}.` : "";
+  const wellbeingText = insights.deepDive.wellbeingSignals.length ? " There was also a gentle wellbeing signal worth checking in on." : "";
+  const unknownText = insights.deepDive.unknownQuestions.length ? ` ${insights.deepDive.unknownQuestions.length} question${insights.deepDive.unknownQuestions.length === 1 ? "" : "s"} could be improved with future GiggleBrain AI support.` : "";
+  return `${childName} spent ${timeText} with GiggleBox. The main areas today were ${topicText}.${moodText}${wellbeingText}${unknownText}`;
+}
+
+function aiBrainStatus(insights: ParentInsights) {
+  const unknownCount = insights.deepDive.unknownQuestions.length;
+  const aiNeededCount = insights.deepDive.aiNeededCount + unknownCount;
+  if (aiNeededCount <= 0) {
+    return {
+      title: "AI Brain not needed yet",
+      detail: "Bop handled the latest report signals with the offline conversation system.",
+      tone: "calm"
+    };
+  }
+  return {
+    title: "GiggleBrain AI opportunity",
+    detail: `${aiNeededCount} moment${aiNeededCount === 1 ? "" : "s"} could be helped by AI fallback later, while safety and Parent Insights stay controlled by GiggleBox.`,
+    tone: "active"
+  };
+}
+
 function defaultParentInsights(childName: string): ParentInsights {
   return {
     notes: [`${childName} has activity in the report. Parent Insights will become richer as Ask Me sends more conversation signals.`],
@@ -285,6 +319,10 @@ export default function ChildDetailPage({ params }: { params: { id: string } }) 
     return items.filter((event) => categoryFor(event.eventType).label.toLowerCase().replace(/\s+/g, "-") === activityFilter);
   }, [data, activityFilter]);
   const parentInsights = data?.parentInsights ?? defaultParentInsights(child?.name ?? "This child");
+  const todayStory = buildTodayStory(child?.name ?? "This child", parentInsights);
+  const aiStatus = aiBrainStatus(parentInsights);
+  const mainTopic = getTopLabel(parentInsights.deepDive.topicSummary, "Building up");
+  const mainEmotion = getTopLabel(parentInsights.deepDive.emotionSummary, latestMood);
 
   return (
     <div className="gb-page">
@@ -316,7 +354,7 @@ export default function ChildDetailPage({ params }: { params: { id: string } }) 
                 <div>
                   <div className="gb-eyebrow">Parent Insights</div>
                   <h1>{child.name}&apos;s Conversation Report</h1>
-                  <p>Parent-friendly notes, transcript, topics, coaching and highlights from GiggleBox Ask Me conversations and play activity.</p>
+                  <p>{todayStory}</p>
                   <div className="gb-actions">
                     <a className="gb-button-secondary" href="/children">Back to Children</a>
                     <button className="gb-button" onClick={load}>Refresh Insights</button>
@@ -333,9 +371,30 @@ export default function ChildDetailPage({ params }: { params: { id: string } }) 
               <section className="gb-report-stats">
                 <div className="gb-report-stat"><span>Age</span><strong>{child.age ?? "—"}</strong></div>
                 <div className="gb-report-stat"><span>Play moments</span><strong>{child.totalEvents}</strong></div>
-                <div className="gb-report-stat"><span>Topics found</span><strong>{parentInsights.deepDive.topicSummary.length}</strong></div>
+                <div className="gb-report-stat"><span>Main topic</span><strong>{mainTopic}</strong></div>
+                <div className="gb-report-stat"><span>Mood signal</span><strong>{mainEmotion}</strong></div>
                 <div className="gb-report-stat"><span>Wellbeing signals</span><strong>{parentInsights.deepDive.wellbeingSignals.length}</strong><small>Gentle check-in prompts</small></div>
+                <div className="gb-report-stat"><span>AI opportunities</span><strong>{parentInsights.deepDive.aiNeededCount + parentInsights.deepDive.unknownQuestions.length}</strong><small>Unknown questions / future fallback</small></div>
                 <div className="gb-report-stat"><span>Device</span><strong>{deviceOnline ? "Online" : "Offline"}</strong><small>{child.linkedDevice?.device_name ?? "Not linked"}</small></div>
+              </section>
+
+              <section className="gb-parent-overview-grid">
+                <div className="gb-card gb-parent-story-card">
+                  <span className="gb-pill">Today's Story</span>
+                  <h2>{child.name}'s GiggleBox journey</h2>
+                  <p>{todayStory}</p>
+                  <div className="gb-mini-metrics">
+                    <span><b>{parentInsights.deepDive.conversationDurationMinutes}</b> min</span>
+                    <span><b>{parentInsights.transcript.length}</b> transcript lines</span>
+                    <span><b>{parentInsights.deepDive.topicSummary.length}</b> topics</span>
+                  </div>
+                </div>
+                <div className={`gb-card gb-ai-brain-card gb-ai-brain-${aiStatus.tone}`}>
+                  <span className="gb-pill">GiggleBrain AI Preview</span>
+                  <h2>{aiStatus.title}</h2>
+                  <p>{aiStatus.detail}</p>
+                  <small>AI should only support safe unknown questions. Wellbeing and safety stay in GiggleBox first.</small>
+                </div>
               </section>
 
               <section className="gb-card gb-parent-insights-card">
@@ -356,8 +415,23 @@ export default function ChildDetailPage({ params }: { params: { id: string } }) 
 
                 <div className="gb-insight-panel">
                   {activeInsightTab === "notes" ? (
-                    <div className="gb-notes-list">
-                      {parentInsights.notes.map((note, index) => <p key={index}>{note}</p>)}
+                    <div className="gb-summary-panel">
+                      <div className="gb-summary-lead">
+                        <span>💙</span>
+                        <div>
+                          <h2>Today's Summary</h2>
+                          <p>{todayStory}</p>
+                        </div>
+                      </div>
+                      <div className="gb-notes-list">
+                        {parentInsights.notes.map((note, index) => <p key={index}>{note}</p>)}
+                      </div>
+                      <div className="gb-summary-tiles">
+                        <div><strong>{mainTopic}</strong><span>Main topic</span></div>
+                        <div><strong>{moodEmoji} {mainEmotion}</strong><span>Mood signal</span></div>
+                        <div><strong>{parentInsights.deepDive.wellbeingSignals.length}</strong><span>Wellbeing signals</span></div>
+                        <div><strong>{parentInsights.deepDive.unknownQuestions.length}</strong><span>Unknown questions</span></div>
+                      </div>
                     </div>
                   ) : null}
 
@@ -388,6 +462,11 @@ export default function ChildDetailPage({ params }: { params: { id: string } }) 
                       <div className="gb-insight-subcard gb-insight-wide">
                         <h3>Questions Bop could not answer yet</h3>
                         {parentInsights.deepDive.unknownQuestions.length === 0 ? <p className="gb-muted">No unknown questions logged yet.</p> : parentInsights.deepDive.unknownQuestions.slice(0, 8).map((item) => <p key={item.id}><span className="gb-time-pill">{formatTime(item.createdAt)}</span> {item.question}</p>)}
+                      </div>
+                      <div className="gb-insight-subcard gb-insight-wide gb-ai-queue-card">
+                        <h3>GiggleBrain AI queue</h3>
+                        <p>{aiStatus.detail}</p>
+                        <p className="gb-muted">These are the moments to show partners: the offline brain stays safe, while AI can later help Bop answer wider curious questions.</p>
                       </div>
                       <div className="gb-insight-subcard gb-insight-wide">
                         <h3>Wellbeing signals</h3>

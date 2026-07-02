@@ -73,7 +73,7 @@ const topicKeywordMap: Record<string, string[]> = {
 const emotionKeywordMap: Record<string, string[]> = {
   happy: ["happy", "good", "great", "excited", "proud", "fun", "laugh", "laughing"],
   sad: ["sad", "down", "unhappy", "upset", "cry", "crying"],
-  worried: ["worried", "worry", "nervous", "anxious"],
+  worried: ["worried", "worry", "nervous", "anxious", "concerned", "concern"],
   angry: ["angry", "cross", "mad", "annoyed", "frustrated"],
   scared: ["scared", "frightened", "afraid"],
   tired: ["tired", "sleepy"]
@@ -81,7 +81,9 @@ const emotionKeywordMap: Record<string, string[]> = {
 
 const wellbeingWords = [
   "hurt", "hurts", "fell", "fall", "bumped", "pain", "poorly", "sick", "sad", "down", "worried",
-  "scared", "lonely", "upset", "crying", "angry", "bully", "bullied", "unsafe"
+  "scared", "lonely", "upset", "crying", "angry", "bully", "bullied", "unsafe",
+  "concerned", "concern", "not okay", "not ok", "not good", "feeling down", "feel down",
+  "feel sad", "i am sad", "i'm sad", "i am worried", "i'm worried", "i am scared", "i'm scared"
 ];
 
 function isEmotionEvent(type: string) {
@@ -211,7 +213,14 @@ function hasWellbeingConcern(event: TelemetryRow) {
   if (booleanValue(event.payload, ["wellbeing", "wellbeingFlag", "wellbeingConcern", "safetyTriggered", "safety", "sensitive"])) return true;
   const safetyLevel = stringValue(event.payload, ["safetyLevel", "conversationSafetyLevel"]);
   if (safetyLevel && safetyLevel.toLowerCase() !== "safe") return true;
-  const text = `${extractTranscriptText(event) ?? ""} ${event.event_type}`.toLowerCase();
+
+  const emotion = inferEmotion(event);
+  if (emotion && ["sad", "worried", "angry", "scared"].includes(emotion.toLowerCase())) return true;
+
+  const rawEmotion = extractEmotion(event.payload);
+  if (rawEmotion && ["sad", "worried", "concerned", "upset", "crying", "scared", "angry"].includes(rawEmotion.toLowerCase())) return true;
+
+  const text = `${extractTranscriptText(event) ?? ""} ${stringValue(event.payload, ["insight", "summary", "message", "reason"]) ?? ""} ${event.event_type}`.toLowerCase();
   return wellbeingWords.some((word) => text.includes(word));
 }
 
@@ -490,7 +499,7 @@ function buildParentInsights(events: TelemetryRow[], childName: string) {
     notes.push(`${childName} has recent GiggleBox activity. More Ask Me conversations will make the insights richer.`);
   }
   if (wellbeingSignals.length) {
-    notes.push(`${childName} shared ${wellbeingSignals.length} wellbeing signal${wellbeingSignals.length === 1 ? "" : "s"}. Treat this as a gentle prompt to check in, not an alarm.`);
+    notes.push(`${childName} shared ${wellbeingSignals.length} wellbeing signal${wellbeingSignals.length === 1 ? "" : "s"}, such as sad, worried, hurt, scared, or concerned language. Treat this as a gentle prompt to check in, not an alarm.`);
   }
   if (unknownQuestions.length) {
     notes.push(`${unknownQuestions.length} question${unknownQuestions.length === 1 ? "" : "s"} may need better offline answers or future GiggleBrain AI support. These are useful partner-demo moments because they show where AI can extend Bop without replacing the offline safety layer.`);

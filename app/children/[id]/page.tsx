@@ -343,6 +343,21 @@ function aiBrainStatus(insights: ParentInsights) {
 }
 
 
+function wellbeingTone(signalCount: number) {
+  if (signalCount <= 0) return "calm";
+  if (signalCount === 1) return "gentle";
+  return "active";
+}
+
+function wellbeingParentCopy(childName: string, signals: ParentInsights["deepDive"]["wellbeingSignals"]) {
+  if (!signals.length) {
+    return `${childName} has not shared any sadness, worry, hurt or concern signals in the latest report.`;
+  }
+  const latest = signals[0];
+  const topicText = latest.topic ? ` around ${humanizeLabel(latest.topic).toLowerCase()}` : "";
+  return `${childName} mentioned something that may need a gentle check-in${topicText}. This is not an alarm, but it is useful for a parent to notice and ask about kindly.`;
+}
+
 function scoreDots(score: number) {
   const safeScore = Math.max(1, Math.min(5, Math.round(score || 1)));
   return "●".repeat(safeScore) + "○".repeat(5 - safeScore);
@@ -501,6 +516,32 @@ export default function ChildDetailPage({ params }: { params: { id: string } }) 
                 <div className="gb-report-stat"><span>AI opportunities</span><strong>{aiOpportunityCount}</strong><small>Unknown questions / future fallback</small></div>
               </section>
 
+              {parentInsights.deepDive.wellbeingSignals.length ? (
+                <section className={`gb-card gb-parent-checkin-card gb-parent-checkin-${wellbeingTone(parentInsights.deepDive.wellbeingSignals.length)}`}>
+                  <div className="gb-checkin-main">
+                    <div className="gb-checkin-icon">💙</div>
+                    <div>
+                      <span className="gb-pill">Parent check-in flag</span>
+                      <h2>Wellbeing mention noticed</h2>
+                      <p>{wellbeingParentCopy(child.name, parentInsights.deepDive.wellbeingSignals)}</p>
+                    </div>
+                  </div>
+                  <div className="gb-checkin-list">
+                    {parentInsights.deepDive.wellbeingSignals.slice(0, 3).map((item) => (
+                      <div className="gb-checkin-row" key={item.id}>
+                        <span>{formatTime(item.createdAt)}</span>
+                        <strong>{item.emotion ? humanizeLabel(item.emotion) : item.topic ? humanizeLabel(item.topic) : "Wellbeing"}</strong>
+                        <p>{item.text}</p>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="gb-checkin-advice">
+                    <strong>Suggested parent response</strong>
+                    <p>Use a calm, open question such as: “I noticed you talked about feeling sad or hurt. Do you want to tell me more?”</p>
+                  </div>
+                </section>
+              ) : null}
+
               <section className="gb-parent-intelligence-section">
                 <div className="gb-parent-intel-lead gb-card">
                   <span className="gb-pill">GiggleBrain 8.0</span>
@@ -621,7 +662,7 @@ export default function ChildDetailPage({ params }: { params: { id: string } }) 
                         <p className="gb-muted">These are the moments to show partners: the offline brain stays safe, while AI can later help Bop answer wider curious questions.</p>
                       </div>
                       <div className="gb-insight-subcard gb-insight-wide">
-                        <h3>Wellbeing signals</h3>
+                        <h3>Wellbeing and check-in flags</h3>
                         {parentInsights.deepDive.wellbeingSignals.length === 0 ? <p className="gb-muted">No wellbeing signals logged yet.</p> : parentInsights.deepDive.wellbeingSignals.slice(0, 8).map((item) => <p key={item.id}><span className="gb-time-pill">{formatTime(item.createdAt)}</span> {item.text}</p>)}
                       </div>
                     </div>

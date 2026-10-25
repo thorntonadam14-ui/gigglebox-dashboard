@@ -1,5 +1,7 @@
 "use client";
 
+import { useParams } from "next/navigation";
+
 import { useEffect, useMemo, useState } from "react";
 import { routingFlag, routingName, storyMakerRoute } from "../../../lib/bop-reporting";
 
@@ -408,10 +410,12 @@ function defaultParentInsights(childName: string): ParentInsights {
   };
 }
 
-export default function ChildDetailPage({ params }: { params: { id: string } }) {
+export default function ChildDetailPage() {
+  const params = useParams<{ id: string }>();
   const [data, setData] = useState<Overview | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [period, setPeriod] = useState("today");
   const [activityFilter, setActivityFilter] = useState("all");
   const [activeInsightTab, setActiveInsightTab] = useState<InsightTab>("notes");
 
@@ -419,7 +423,11 @@ export default function ChildDetailPage({ params }: { params: { id: string } }) 
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`/api/dashboard/overview?childId=${params.id}`, { cache: "no-store" });
+      const response = await fetch(`/api/dashboard/overview?childId=${params.id}&period=${period}`, { cache: "no-store" });
+      if (response.status === 401) {
+        window.location.assign(`/login?next=${encodeURIComponent(`/children/${params.id}`)}`);
+        return;
+      }
       const json = await response.json();
       if (!response.ok || !json.ok) throw new Error(json.error || "Failed to load child detail.");
       setData(json);
@@ -430,7 +438,7 @@ export default function ChildDetailPage({ params }: { params: { id: string } }) 
     }
   }
 
-  useEffect(() => { load(); }, [params.id]);
+  useEffect(() => { load(); }, [params.id, period]);
 
   const child = data?.children?.[0] ?? null;
   const filteredWords = useMemo(() => (data?.deepDive.words ?? []).filter((item) => !isSystemWord(item.word)), [data]);
@@ -502,11 +510,16 @@ export default function ChildDetailPage({ params }: { params: { id: string } }) 
                 <div className="gb-parent-hero-story">
                   <div className="gb-eyebrow">Parent Insights</div>
                   <h1>{child.name}&apos;s Conversation Report</h1>
-                  <span className="gb-pill">Today&apos;s Story</span>
+                  <span className="gb-pill">{period === "today" ? "Activity received today" : "Recent history (latest 700 events)"}</span>
+                  <small>Database receipt time · Europe/London</small>
                   <p>{todayStory}</p>
                   <div className="gb-actions">
                     <a className="gb-button-secondary" href="/children">Back to Children</a>
                     <button className="gb-button" onClick={load}>Refresh Insights</button>
+                    <select className="gb-select" aria-label="Reporting period" value={period} onChange={event => { setData(null); setPeriod(event.target.value); }}>
+                      <option value="today">Received today (UK)</option>
+                      <option value="history">Recent history</option>
+                    </select>
                   </div>
                 </div>
                 <div className="gb-parent-hero-side">
@@ -626,7 +639,7 @@ export default function ChildDetailPage({ params }: { params: { id: string } }) 
                       <div className="gb-summary-lead">
                         <span>💙</span>
                         <div>
-                          <h2>Today's Summary</h2>
+                          <h2>{period === "today" ? "Activity received today" : "Recent history summary"}</h2>
                           <p>{todayStory}</p>
                         </div>
                       </div>

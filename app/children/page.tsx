@@ -13,10 +13,11 @@ export default function ChildrenPage() {
   async function loadChildren() {
     setLoading(true); setError(null);
     try {
-      const response = await fetch("/api/children", { cache: "no-store" });
+      const response = await fetch("/api/dashboard/overview", { cache: "no-store" });
+      if (response.status === 401) { window.location.assign("/login?next=%2Fchildren"); return; }
       const json = await response.json();
       if (!response.ok || !json.ok) throw new Error(json.error || "Failed to load children.");
-      setData(json);
+      setData({ ...json, count: json.children.length });
     } catch (err) { setError(err instanceof Error ? err.message : "Unknown error"); }
     finally { setLoading(false); }
   }

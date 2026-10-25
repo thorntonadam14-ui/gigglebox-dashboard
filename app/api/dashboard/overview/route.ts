@@ -1,3 +1,4 @@
+import { londonReceiptDay } from "../../../../lib/reporting-window";
 import { routingFlag, storyMakerRoute } from "../../../../lib/bop-reporting";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
@@ -605,6 +606,8 @@ export async function GET(request: NextRequest) {
     if (!user) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
     const supabase = getSupabaseAdmin();
     const childId = request.nextUrl.searchParams.get("childId");
+    const history = request.nextUrl.searchParams.get("period") === "history";
+    const receiptDay = londonReceiptDay();
     const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     const denied = () => NextResponse.json({ error: "Access denied." }, { status: 403 });
     if (childId !== null && !uuid.test(childId)) return denied();
@@ -626,18 +629,32 @@ export async function GET(request: NextRequest) {
     if (!childIds.every(id => uuid.test(id))) throw new Error("Invalid child identifier.");
     const empty = { data: [], error: null };
 
-    // Prefer the stored child_id. Older Unity events use explicit payload child
-    // IDs instead. Never authorise unassigned history using a device's new owner.
+    // The live telemetry schema stores child identity in payload, not a child_id
+    // column. Preserve explicit-ID precedence; never infer history ownership
+    // from a device's current assignment.
     const ids = childIds.join(",");
     const eventScope = [
-      `child_id.in.(${ids})`,
-      `and(child_id.is.null,payload->>activeChildId.in.(${ids}))`,
-      `and(child_id.is.null,payload->>activeChildId.is.null,payload->>childId.in.(${ids}))`,
-      `and(child_id.is.null,payload->>activeChildId.is.null,payload->>childId.is.null,payload->>child_id.in.(${ids}))`
+      `payload->>activeChildId.in.(${ids})`,
+      `and(payload->>activeChildId.is.null,payload->>childId.in.(${ids}))`,
+      `and(payload->>activeChildId.is.null,payload->>childId.is.null,payload->>child_id.in.(${ids}))`
     ].join(",");
+    async function receivedEvents() {
+      if (history) return supabase.from("telemetry_events").select("*").or(eventScope)
+        .order("created_at", { ascending: false }).limit(700);
+      // Filter before pagination; today's totals must not be truncated to 700.
+      const data: RawTelemetryRow[] = [];
+      for (let offset = 0; ; offset += 700) {
+        const page = await supabase.from("telemetry_events").select("*").or(eventScope)
+          .gte("created_at", receiptDay.start).lt("created_at", receiptDay.end)
+          .order("created_at", { ascending: false }).order("id", { ascending: false })
+          .range(offset, offset + 699);
+        if (page.error) return { data: null, error: page.error };
+        data.push(...(page.data ?? []));
+        if ((page.data ?? []).length < 700) return { data, error: null };
+      }
+    }
     const [telemetryResult, linksResult, alertsResult] = childIds.length ? await Promise.all([
-      supabase.from("telemetry_events").select("*").or(eventScope)
-        .order("created_at", { ascending: false }).limit(700),
+      receivedEvents(),
       supabase.from("child_device_links").select("id,child_id,device_id,created_at")
         .in("child_id", childIds).order("created_at", { ascending: false }),
       supabase.from("alerts").select("id,child_id,alert_type,message,created_at")
@@ -817,7 +834,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       ok: true,
-      filters: { childId },
+      filters: { childId, period: history ? "history" : "today", receiptDate: receiptDay.date, timeZone: "Europe/London", timestampBasis: "created_at" },
       summary: {
         totalChildren: filteredChildren.length,
         totalDevices: filteredDevices.length,

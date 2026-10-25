@@ -1,5 +1,7 @@
+import { routingFlag, storyMakerRoute } from "../../../../lib/bop-reporting";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { getCurrentParentUser } from "../../../../src/lib/gigglebox/auth-adapter";
 
 function getEnv(name: string) {
   const value = process.env[name];
@@ -19,6 +21,7 @@ function getSupabaseAdmin() {
 
 type TelemetryRow = {
   id: string;
+  child_id?: string | null;
   device_id: string;
   event_type: string;
   payload: Record<string, unknown>;
@@ -230,14 +233,17 @@ function isUnknownQuestion(event: TelemetryRow) {
 }
 
 function isAiNeeded(event: TelemetryRow) {
-  if (booleanValue(event.payload, ["aiNeeded", "ai_needed", "aiFallbackNeeded", "needsAi"])) return true;
+  if (booleanValue(event.payload, ["aiNeeded", "ai_needed", "aiFallbackNeeded", "aiFallbackNeededLater", "needsAi"])) return true;
+  if (["usedAI", "aiEligible", "aiFailed"].some(key => routingFlag(event.payload, key))) return true;
   const type = event.event_type.toLowerCase();
   return type.includes("ai_needed") || type.includes("ai_fallback") || type.includes("gigglebrain_ai_needed");
 }
 
 
 function getGameName(event: TelemetryRow) {
-  const explicit = stringValue(event.payload, ["gameName", "game_name", "game", "gameKey", "game_key", "activity", "source"]);
+  if (storyMakerRoute(event.event_type, event.payload)) return "Story Maker";
+  if (event.event_type === "askme_parent_insight") return "Ask Me";
+  const explicit = stringValue(event.payload, ["gameName", "game_name", "game", "gameKey", "game_key", "activity"]);
   if (explicit) return labelFromValue(explicit);
   const type = event.event_type.toLowerCase();
   if (type.includes("monsterchef") || type.includes("monster_chef")) return "Monster Chef";
@@ -259,7 +265,7 @@ function buildGameActivity(events: TelemetryRow[]) {
   for (const event of events) {
     const gameName = getGameName(event);
     const word = extractWord(event.payload);
-    const explicitGameForWord = stringValue(event.payload, ["gameName", "game_name", "game", "gameKey", "game_key", "activity", "source"]);
+    const explicitGameForWord = stringValue(event.payload, ["gameName", "game_name", "game", "gameKey", "game_key", "activity"]);
 
     if (!gameName && !(event.event_type === "word_spoken" && explicitGameForWord)) continue;
 
@@ -356,7 +362,7 @@ function buildParentIntelligence(params: {
   const communicationScore = Math.min(5, Math.max(1, Math.round((childLines + topTopics.length) / 4)));
   const confidenceScore = Math.min(5, Math.max(1, wellbeingSignals.length ? 2 : Math.round((childLines + topEmotions.length + events.length / 10) / 3)));
 
-  const todaysStory = `${childName} spent time with GiggleBox exploring ${topicText}. The strongest mood signal was ${strongestEmotion}. ${unknownQuestions.length ? `${childName} asked ${unknownQuestions.length} question${unknownQuestions.length === 1 ? "" : "s"} that could be helped by GiggleBrain AI.` : "Bop was able to support the latest activity with the current offline system."}${wellbeingSignals.length ? " There was a gentle wellbeing signal worth checking in on." : ""}`;
+  const todaysStory = `${childName} spent time with GiggleBox exploring ${topicText}. The most frequent mood signal across the recent report was ${strongestEmotion}. ${unknownQuestions.length ? `${childName} asked ${unknownQuestions.length} question${unknownQuestions.length === 1 ? "" : "s"} flagged as unknown; their response outcomes are shown in activity details.` : "No unknown-question signals were recorded in this report."}${wellbeingSignals.length ? " There was a gentle wellbeing signal worth checking in on." : ""}`;
 
   const parentIdeas: string[] = [];
   if (topTopics.some((item) => item.label === "dinosaurs")) parentIdeas.push("Ask which dinosaur was most interesting today, then look up a picture or book together.");
@@ -502,12 +508,12 @@ function buildParentInsights(events: TelemetryRow[], childName: string) {
     notes.push(`${childName} shared ${wellbeingSignals.length} wellbeing signal${wellbeingSignals.length === 1 ? "" : "s"}, such as sad, worried, hurt, scared, or concerned language. Treat this as a gentle prompt to check in, not an alarm.`);
   }
   if (unknownQuestions.length) {
-    notes.push(`${unknownQuestions.length} question${unknownQuestions.length === 1 ? "" : "s"} may need better offline answers or future GiggleBrain AI support. These are useful partner-demo moments because they show where AI can extend Bop without replacing the offline safety layer.`);
+    notes.push(`${unknownQuestions.length} question${unknownQuestions.length === 1 ? "" : "s"} were flagged as unknown. This does not establish whether AI subsequently answered; check the recorded routing outcomes.`);
     highlights.push({
       id: "gigglebrain-ai-opportunity",
       kind: "AI Brain",
-      title: "GiggleBrain AI opportunity",
-      detail: `${unknownQuestions.length} safe unknown question${unknownQuestions.length === 1 ? "" : "s"} could be routed to AI fallback later.`,
+      title: "Questions flagged as unknown",
+      detail: `${unknownQuestions.length} question${unknownQuestions.length === 1 ? "" : "s"} flagged as unknown; see routing outcomes for any subsequent AI response.`,
       createdAt: unknownQuestions[0]?.createdAt ?? events[0]?.created_at ?? events[0]?.occurred_at ?? null
     });
   }
@@ -591,40 +597,67 @@ function buildParentInsights(events: TelemetryRow[], childName: string) {
   };
 }
 
+export const dynamic = "force-dynamic";
+
 export async function GET(request: NextRequest) {
   try {
+    const user = await getCurrentParentUser();
+    if (!user) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
     const supabase = getSupabaseAdmin();
     const childId = request.nextUrl.searchParams.get("childId");
+    const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const denied = () => NextResponse.json({ error: "Access denied." }, { status: 403 });
+    if (childId !== null && !uuid.test(childId)) return denied();
 
-    const [
-      telemetryResult,
-      childrenResult,
-      devicesResult,
-      linksResult,
-      alertsResult
-    ] = await Promise.all([
-      supabase.from("telemetry_events").select("*").order("created_at", { ascending: false }).limit(700),
-      supabase.from("children").select("id,name,age,created_at").order("created_at", { ascending: false }),
-      supabase.from("devices").select("id,serial_number,device_name,created_at").order("created_at", { ascending: false }),
-      supabase.from("child_device_links").select("id,child_id,device_id,created_at").order("created_at", { ascending: false }),
-      supabase.from("alerts").select("id,child_id,alert_type,message,created_at").order("created_at", { ascending: false })
-    ]);
-
-    if (telemetryResult.error) throw telemetryResult.error;
+    // Resolve the verified session, never a parent ID supplied by the client.
+    // Read only: reporting must not create a parent profile.
+    const parentResult = await supabase.from("parent_profiles").select("id")
+      .eq("auth_user_id", user.id).maybeSingle();
+    if (parentResult.error) throw parentResult.error;
+    if (!parentResult.data) return denied();
+    let childrenQuery = supabase.from("children").select("id,name,age,created_at")
+      .eq("parent_id", parentResult.data.id);
+    if (childId) childrenQuery = childrenQuery.eq("id", childId);
+    const childrenResult = await childrenQuery.order("created_at", { ascending: false });
     if (childrenResult.error) throw childrenResult.error;
-    if (devicesResult.error) throw devicesResult.error;
+    const children = (childrenResult.data ?? []) as ChildRow[];
+    if (childId && !children.some(child => child.id === childId)) return denied();
+    const childIds = children.map(child => child.id);
+    if (!childIds.every(id => uuid.test(id))) throw new Error("Invalid child identifier.");
+    const empty = { data: [], error: null };
+
+    // Prefer the stored child_id. Older Unity events use explicit payload child
+    // IDs instead. Never authorise unassigned history using a device's new owner.
+    const ids = childIds.join(",");
+    const eventScope = [
+      `child_id.in.(${ids})`,
+      `and(child_id.is.null,payload->>activeChildId.in.(${ids}))`,
+      `and(child_id.is.null,payload->>activeChildId.is.null,payload->>childId.in.(${ids}))`,
+      `and(child_id.is.null,payload->>activeChildId.is.null,payload->>childId.is.null,payload->>child_id.in.(${ids}))`
+    ].join(",");
+    const [telemetryResult, linksResult, alertsResult] = childIds.length ? await Promise.all([
+      supabase.from("telemetry_events").select("*").or(eventScope)
+        .order("created_at", { ascending: false }).limit(700),
+      supabase.from("child_device_links").select("id,child_id,device_id,created_at")
+        .in("child_id", childIds).order("created_at", { ascending: false }),
+      supabase.from("alerts").select("id,child_id,alert_type,message,created_at")
+        .in("child_id", childIds).order("created_at", { ascending: false })
+    ]) : [empty, empty, empty];
+    if (telemetryResult.error) throw telemetryResult.error;
     if (linksResult.error) throw linksResult.error;
     if (alertsResult.error) throw alertsResult.error;
-
-    const telemetry = (telemetryResult.data ?? []) as RawTelemetryRow[];
-    const normalizedTelemetry = telemetry.map((event) => ({
-      ...event,
-      payload: coercePayload(event.payload)
-    })) as TelemetryRow[];
-    const children = (childrenResult.data ?? []) as ChildRow[];
+    const authorisedIds = new Set(childIds);
+    const links = ((linksResult.data ?? []) as LinkRow[]).filter(link => authorisedIds.has(link.child_id));
+    const alerts = ((alertsResult.data ?? []) as AlertRow[]).filter(alert => alert.child_id !== null && authorisedIds.has(alert.child_id));
+    const deviceIds = Array.from(new Set(links.map(link => link.device_id)));
+    const devicesResult = deviceIds.length
+      ? await supabase.from("devices").select("id,serial_number,device_name,created_at").in("id", deviceIds)
+      : empty;
+    if (devicesResult.error) throw devicesResult.error;
     const devices = (devicesResult.data ?? []) as DeviceRow[];
-    const links = (linksResult.data ?? []) as LinkRow[];
-    const alerts = (alertsResult.data ?? []) as AlertRow[];
+    const normalizedTelemetry = ((telemetryResult.data ?? []) as RawTelemetryRow[]).map(event => ({
+      ...event, payload: coercePayload(event.payload)
+    })).filter(event => authorisedIds.has(event.child_id ?? extractActiveChildId(event.payload) ?? "")) as TelemetryRow[];
 
     const childById = new Map(children.map((child) => [child.id, child]));
     const deviceById = new Map(devices.map((device) => [device.id, device]));
@@ -641,7 +674,7 @@ export async function GET(request: NextRequest) {
     );
 
     const resolveChildIdForEvent = (event: TelemetryRow) => {
-      return extractActiveChildId(event.payload) ?? deviceToChild.get(event.device_id) ?? null;
+      return event.child_id ?? extractActiveChildId(event.payload) ?? null;
     };
 
     const filteredTelemetry = childId
@@ -814,7 +847,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(
       {
         ok: false,
-        error: error instanceof Error ? error.message : "Unknown error"
+        error: "Unable to load reporting."
       },
       { status: 500 }
     );

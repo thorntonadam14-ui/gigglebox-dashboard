@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { routingFlag, routingName, storyMakerRoute } from "../../../lib/bop-reporting";
 
 type ParentInsights = {
   intelligence?: {
@@ -218,8 +219,19 @@ function summarizeEvent(eventType: string, payload: Record<string, unknown>, chi
       return word ? `${safeName} said “${word}”.` : `${safeName} practised speaking.`;
     case "emotion_state":
       return emotion ? `${safeName} checked in as ${humanizeLabel(emotion)}.` : `${safeName} shared an emotion.`;
+    case "story_maker":
+    case "story_maker_complete":
     case "askme_parent_insight":
     case "askme_conversation_signal":
+      if (storyMakerRoute(eventType, payload) === "story_maker_complete")
+        return `${safeName} completed a Story Maker story; Bop saved it in Books.`;
+      if (storyMakerRoute(eventType, payload) === "story_maker")
+        return `${safeName} is creating a story with Bop.`;
+      if (routingFlag(payload, "safetyTriggered")) return "Bop used the safety response route.";
+      if (routingFlag(payload, "aiFailed")) return "Bop used a fallback after the AI request failed.";
+      if (routingFlag(payload, "usedAI")) return "Bop answered using AI.";
+      if (routingFlag(payload, "aiEligible")) return "This question was eligible for an AI answer.";
+      if (routingName(payload) === "offline") return "Bop answered using the local conversation system.";
       return insight || `${safeName} shared a Parent Insights signal${topic ? ` about ${humanizeLabel(topic).toLowerCase()}` : ""}.`;
     case "askme_unknown_question":
       return word ? `${safeName} asked a question Bop could not answer yet: “${word}”.` : `${safeName} asked a question Bop could not answer yet.`;
@@ -266,7 +278,9 @@ function isGameEventType(eventType: string) {
 }
 
 function gameNameFromEvent(eventType: string, payload: Record<string, unknown>) {
-  const explicitKeys = ["gameName", "game_name", "game", "gameKey", "game_key", "activity", "source"];
+  if (storyMakerRoute(eventType, payload)) return "Story Maker";
+  if (eventType === "askme_parent_insight") return "Ask Me";
+  const explicitKeys = ["gameName", "game_name", "game", "gameKey", "game_key", "activity"];
   for (const key of explicitKeys) {
     const value = payload[key];
     if (typeof value === "string" && value.trim()) return humanizeLabel(value);
@@ -319,25 +333,25 @@ function buildTodayStory(childName: string, insights: ParentInsights) {
   const minutes = insights.deepDive.conversationDurationMinutes;
   const topicText = topTopics.length ? topTopics.join(", ") : "conversation, play and learning";
   const timeText = minutes > 0 ? `${minutes} minute${minutes === 1 ? "" : "s"}` : "today";
-  const moodText = topEmotion ? ` The strongest mood signal was ${topEmotion}.` : "";
+  const moodText = topEmotion ? ` The most frequent mood signal across the recent report was ${topEmotion}.` : "";
   const wellbeingText = insights.deepDive.wellbeingSignals.length ? " There was also a gentle wellbeing signal worth checking in on." : "";
-  const unknownText = insights.deepDive.unknownQuestions.length ? ` ${insights.deepDive.unknownQuestions.length} question${insights.deepDive.unknownQuestions.length === 1 ? "" : "s"} could be improved with future GiggleBrain AI support.` : "";
+  const unknownText = insights.deepDive.unknownQuestions.length ? ` ${insights.deepDive.unknownQuestions.length} question${insights.deepDive.unknownQuestions.length === 1 ? "" : "s"} were flagged as unknown; see activity details for response outcomes.` : "";
   return `${childName} spent ${timeText} with GiggleBox. The main areas today were ${topicText}.${moodText}${wellbeingText}${unknownText}`;
 }
 
 function aiBrainStatus(insights: ParentInsights) {
   const unknownCount = insights.deepDive.unknownQuestions.length;
-  const aiNeededCount = insights.deepDive.aiNeededCount + unknownCount;
+  const aiNeededCount = insights.deepDive.aiNeededCount;
   if (aiNeededCount <= 0) {
     return {
-      title: "AI Brain not needed yet",
-      detail: "Bop handled the latest report signals with the offline conversation system.",
+      title: "No AI-routing signals recorded",
+      detail: "No AI-routing signals are recorded in this report; this alone does not prove that every response was offline.",
       tone: "calm"
     };
   }
   return {
-    title: "GiggleBrain AI opportunity",
-    detail: `${aiNeededCount} moment${aiNeededCount === 1 ? "" : "s"} could be helped by AI fallback later, while safety and Parent Insights stay controlled by GiggleBox.`,
+    title: "GiggleBrain AI routing",
+    detail: `${aiNeededCount} moment${aiNeededCount === 1 ? "" : "s"} contain AI use, eligibility, failure or fallback-request signals. Activity details distinguish recorded outcomes; these are not all successful AI answers.`,
     tone: "active"
   };
 }
@@ -442,7 +456,7 @@ export default function ChildDetailPage({ params }: { params: { id: string } }) 
   const aiStatus = aiBrainStatus(parentInsights);
   const mainTopic = getTopLabel(parentInsights.deepDive.topicSummary, "Building up");
   const mainEmotion = getTopLabel(parentInsights.deepDive.emotionSummary, latestMood);
-  const aiOpportunityCount = parentInsights.deepDive.aiNeededCount + parentInsights.deepDive.unknownQuestions.length;
+  const aiOpportunityCount = parentInsights.deepDive.aiNeededCount;
   const eventTypes = data?.deepDive.eventTypes ?? {};
   const gameMoments = Object.entries(eventTypes).reduce((total, [type, count]) => {
     const key = type.toLowerCase();
@@ -497,13 +511,13 @@ export default function ChildDetailPage({ params }: { params: { id: string } }) 
                 </div>
                 <div className="gb-parent-hero-side">
                   <div className="gb-mood-card gb-mood-card-compact">
-                    <span>Current mood</span>
+                    <span>Latest recorded mood signal</span>
                     <strong>{latestMood}</strong>
                     <div className="gb-mood-emoji">{moodEmoji}</div>
-                    <small>Checked {formatRelative(lastSeen)} · {formatDateTime(lastSeen)}</small>
+                    <small>Recorded {formatDateTime(data?.deepDive.emotions?.[0]?.createdAt ?? null)}</small>
                   </div>
                   <div className={`gb-ai-mini gb-ai-mini-${aiStatus.tone}`}>
-                    <strong>GiggleBrain AI Preview</strong>
+                    <strong>GiggleBrain AI routing</strong>
                     <p>{aiStatus.detail}</p>
                   </div>
                 </div>
@@ -511,9 +525,9 @@ export default function ChildDetailPage({ params }: { params: { id: string } }) 
 
               <section className="gb-report-stats gb-report-stats-focus">
                 <div className="gb-report-stat"><span>Main topic</span><strong>{mainTopic}</strong></div>
-                <div className="gb-report-stat"><span>Mood signal</span><strong>{moodEmoji} {mainEmotion}</strong></div>
+                <div className="gb-report-stat"><span>Most frequent mood signal in this report</span><strong>{moodEmoji} {mainEmotion}</strong></div>
                 <div className="gb-report-stat"><span>Wellbeing</span><strong>{parentInsights.deepDive.wellbeingSignals.length}</strong><small>Gentle check-in signals</small></div>
-                <div className="gb-report-stat"><span>AI opportunities</span><strong>{aiOpportunityCount}</strong><small>Unknown questions / future fallback</small></div>
+                <div className="gb-report-stat"><span>AI-routing signals</span><strong>{aiOpportunityCount}</strong><small>Recorded routing signals, not successful-answer totals</small></div>
               </section>
 
               {parentInsights.deepDive.wellbeingSignals.length ? (
@@ -621,7 +635,7 @@ export default function ChildDetailPage({ params }: { params: { id: string } }) 
                       </div>
                       <div className="gb-summary-tiles">
                         <div><strong>{mainTopic}</strong><span>Main topic</span></div>
-                        <div><strong>{moodEmoji} {mainEmotion}</strong><span>Mood signal</span></div>
+                        <div><strong>{moodEmoji} {mainEmotion}</strong><span>Most frequent mood signal in this report</span></div>
                         <div><strong>{parentInsights.deepDive.wellbeingSignals.length}</strong><span>Wellbeing signals</span></div>
                         <div><strong>{parentInsights.deepDive.unknownQuestions.length}</strong><span>Unknown questions</span></div>
                       </div>
@@ -657,9 +671,9 @@ export default function ChildDetailPage({ params }: { params: { id: string } }) 
                         {parentInsights.deepDive.unknownQuestions.length === 0 ? <p className="gb-muted">No unknown questions logged yet.</p> : parentInsights.deepDive.unknownQuestions.slice(0, 8).map((item) => <p key={item.id}><span className="gb-time-pill">{formatTime(item.createdAt)}</span> {item.question}</p>)}
                       </div>
                       <div className="gb-insight-subcard gb-insight-wide gb-ai-queue-card">
-                        <h3>GiggleBrain AI queue</h3>
+                        <h3>GiggleBrain AI routing</h3>
                         <p>{aiStatus.detail}</p>
-                        <p className="gb-muted">These are the moments to show partners: the offline brain stays safe, while AI can later help Bop answer wider curious questions.</p>
+                        <p className="gb-muted">Activity details show recorded AI answers, failed requests, eligibility and local or safety routes where supplied.</p>
                       </div>
                       <div className="gb-insight-subcard gb-insight-wide">
                         <h3>Wellbeing and check-in flags</h3>

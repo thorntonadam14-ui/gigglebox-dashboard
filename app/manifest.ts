@@ -2,13 +2,15 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "GiggleBox Dashboard",
+    name: "GiggleBox Parent Dashboard",
     short_name: "GiggleBox",
     description: "Parent dashboard for GiggleBox child setup, sync, and activity.",
-    start_url: "/",
+    id: "/",
+    start_url: "/children",
+    scope: "/",
     display: "standalone",
     background_color: "#ffffff",
-    theme_color: "#7c3aed",
+    theme_color: "#7d40ff",
     orientation: "portrait",
     icons: [
       {

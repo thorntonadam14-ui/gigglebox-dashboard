@@ -3,7 +3,7 @@
 import { useParams } from "next/navigation";
 
 import { useEffect, useMemo, useState } from "react";
-import { routingFlag, routingName, storyMakerRoute } from "../../../lib/bop-reporting";
+import { routingFlag, routingName, storyMakerRoute, liveBopResultSummary, type LiveBopGameTotals } from "../../../lib/bop-reporting";
 
 type ParentInsights = {
   intelligence?: {
@@ -107,6 +107,7 @@ type Overview = {
       createdAt: string | null;
     }>;
     eventTypes: Record<string, number>;
+    liveBopGameResults?: Record<string, LiveBopGameTotals>;
     gameActivity?: Array<{
       name: string;
       playCount: number;
@@ -216,6 +217,12 @@ function summarizeEvent(eventType: string, payload: Record<string, unknown>, chi
   const choiceLabel = typeof payload.choice_label === "string" ? payload.choice_label : null;
   const saveTitle = typeof payload.title === "string" ? payload.title : null;
 
+  if (eventType === "game_result" && payload.source === "Live Bop") {
+    if (payload.stage === "answer") return `Live Bop Maths: ${payload.correct === 1 ? "correct" : "incorrect"} answer.`;
+    if (payload.stage === "round") return "Live Bop Peekaboo: successful return detected.";
+    if (payload.stage === "complete") return `Live Bop ${String(payload.gameName)} session completed.`;
+    if (payload.stage === "interrupted") return `Live Bop ${String(payload.gameName)} session interrupted.`;
+  }
   switch (eventType) {
     case "word_spoken":
       return word ? `${safeName} said “${word}”.` : `${safeName} practised speaking.`;
@@ -763,6 +770,7 @@ export default function ChildDetailPage() {
                           <div className="gb-game-icon">{gameIcon(game.name)}</div>
                           <div className="gb-game-main">
                             <strong>{game.name}</strong>
+                            {data.deepDive.liveBopGameResults?.[game.name] ? <p>{liveBopResultSummary(game.name, data.deepDive.liveBopGameResults[game.name])}</p> : null}
                             <small>{game.playCount} play moment{game.playCount === 1 ? "" : "s"}{game.lastPlayedAt ? ` · last ${formatDateTime(game.lastPlayedAt)}` : ""}</small>
                             {game.eventTypes.length ? <span>{game.eventTypes.map(humanizeLabel).slice(0, 3).join(" · ")}</span> : null}
                           </div>

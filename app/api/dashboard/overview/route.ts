@@ -1,5 +1,5 @@
 import { londonReceiptDay } from "../../../../lib/reporting-window";
-import { routingFlag, storyMakerRoute } from "../../../../lib/bop-reporting";
+import { routingFlag, storyMakerRoute, isLiveBopResult, deduplicateGameResults, liveBopGameResults } from "../../../../lib/bop-reporting";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getCurrentParentUser } from "../../../../src/lib/gigglebox/auth-adapter";
@@ -279,7 +279,7 @@ function buildGameActivity(events: TelemetryRow[]) {
       eventTypes: new Set<string>()
     };
 
-    if (isGameLikeEvent(event)) {
+    if (isGameLikeEvent(event) && (!isLiveBopResult(event) || ["answer", "round"].includes(String(event.payload.stage)))) {
       current.playCount += 1;
       current.eventTypes.add(event.event_type);
     }
@@ -672,9 +672,9 @@ export async function GET(request: NextRequest) {
       : empty;
     if (devicesResult.error) throw devicesResult.error;
     const devices = (devicesResult.data ?? []) as DeviceRow[];
-    const normalizedTelemetry = ((telemetryResult.data ?? []) as RawTelemetryRow[]).map(event => ({
+    const normalizedTelemetry = deduplicateGameResults(((telemetryResult.data ?? []) as RawTelemetryRow[]).map(event => ({
       ...event, payload: coercePayload(event.payload)
-    })).filter(event => authorisedIds.has(event.child_id ?? extractActiveChildId(event.payload) ?? "")) as TelemetryRow[];
+    })).filter(event => authorisedIds.has(event.child_id ?? extractActiveChildId(event.payload) ?? "")) as TelemetryRow[]);
 
     const childById = new Map(children.map((child) => [child.id, child]));
     const deviceById = new Map(devices.map((device) => [device.id, device]));
@@ -856,6 +856,7 @@ export async function GET(request: NextRequest) {
         savedArtwork,
         eventTypes,
         gameActivity,
+        liveBopGameResults: liveBopGameResults(filteredTelemetry),
         gameEvents
       },
       alerts: filteredAlerts
